@@ -1,0 +1,97 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1320" height="820" viewBox="0 0 1320 820" role="img" aria-labelledby="title desc">
+  <title id="title">Runtime flow</title>
+  <desc id="desc">Supported local/offline runtime flow including boot from saved config, calibration, ready precheck, insert, release hold, suction exit conditions, score, and reset.</desc>
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="8" markerHeight="8" orient="auto">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#315b68"/>
+    </marker>
+    <style>
+      .bg { fill: #f7faf9; }
+      .setup { fill: #eef7f4; stroke: #315b68; stroke-width: 2.5; rx: 12; }
+      .decision { fill: #ffffff; stroke: #315b68; stroke-width: 2.5; rx: 12; }
+      .practice { fill: #fff7e8; stroke: #b9852c; stroke-width: 2.5; rx: 12; }
+      .score { fill: #edf7ed; stroke: #3f7f46; stroke-width: 2.5; rx: 12; }
+      .reset { fill: #fdeeee; stroke: #b84d4d; stroke-width: 2.5; rx: 12; }
+      .title { font-family: system-ui, -apple-system, BlinkMacSystemFont, "Noto Sans Thai", Arial, sans-serif; fill: #173033; font-size: 30px; font-weight: 800; }
+      .text { font-family: system-ui, -apple-system, BlinkMacSystemFont, "Noto Sans Thai", Arial, sans-serif; fill: #173033; font-size: 19px; font-weight: 750; }
+      .sub { font-family: system-ui, -apple-system, BlinkMacSystemFont, "Noto Sans Thai", Arial, sans-serif; fill: #4c6265; font-size: 14px; font-weight: 500; }
+      .label { font-family: system-ui, -apple-system, BlinkMacSystemFont, "Noto Sans Thai", Arial, sans-serif; fill: #315b68; font-size: 13px; font-weight: 700; }
+      .line { fill: none; stroke: #315b68; stroke-width: 2.4; marker-end: url(#arrow); }
+      .resetLine { fill: none; stroke: #b84d4d; stroke-width: 2.2; stroke-dasharray: 7 6; marker-end: url(#arrow); }
+    </style>
+  </defs>
+  <rect class="bg" width="1320" height="820"/>
+  <text class="title" x="44" y="54">Flow การใช้งาน local/offline practice</text>
+
+  <rect class="setup" x="45" y="95" width="165" height="86"/>
+  <text class="text" x="128" y="130" text-anchor="middle">เปิดเครื่อง</text>
+  <text class="sub" x="128" y="157" text-anchor="middle">setup pins, AP, DNS</text>
+
+  <rect class="decision" x="270" y="90" width="220" height="96"/>
+  <text class="text" x="380" y="124" text-anchor="middle">Boot saved config</text>
+  <text class="sub" x="380" y="151" text-anchor="middle">app.boot()</text>
+  <text class="sub" x="380" y="173" text-anchor="middle">อ่าน Preferences</text>
+
+  <rect class="setup" x="575" y="95" width="205" height="86"/>
+  <text class="text" x="678" y="130" text-anchor="middle">Mode setup</text>
+  <text class="sub" x="678" y="157" text-anchor="middle">local/offline practice</text>
+
+  <rect class="setup" x="870" y="60" width="190" height="86"/>
+  <text class="text" x="965" y="94" text-anchor="middle">Calibrate light</text>
+  <text class="sub" x="965" y="121" text-anchor="middle">เก็บ baseline 5 จุด</text>
+
+  <rect class="setup" x="870" y="205" width="205" height="86"/>
+  <text class="text" x="972" y="239" text-anchor="middle">Calibrate pressure</text>
+  <text class="sub" x="972" y="266" text-anchor="middle">zero + deadband</text>
+
+  <rect class="setup" x="575" y="370" width="250" height="130"/>
+  <text class="text" x="700" y="407" text-anchor="middle">Ready precheck</text>
+  <text class="sub" x="700" y="435" text-anchor="middle">light stable + clear</text>
+  <text class="sub" x="700" y="459" text-anchor="middle">pressure readable + stable</text>
+  <text class="sub" x="700" y="483" text-anchor="middle">baseline drift acceptable</text>
+
+  <rect class="practice" x="90" y="610" width="190" height="98"/>
+  <text class="text" x="185" y="647" text-anchor="middle">Insert</text>
+  <text class="sub" x="185" y="674" text-anchor="middle">พับสายก่อนใส่</text>
+
+  <rect class="practice" x="365" y="610" width="220" height="98"/>
+  <text class="text" x="475" y="647" text-anchor="middle">Release confirmed</text>
+  <text class="sub" x="475" y="674" text-anchor="middle">drop + ratio + hold 200 ms</text>
+
+  <rect class="practice" x="670" y="595" width="260" height="128"/>
+  <text class="text" x="800" y="630" text-anchor="middle">Suction / Withdraw</text>
+  <text class="sub" x="800" y="657" text-anchor="middle">exit bands passed</text>
+  <text class="sub" x="800" y="681" text-anchor="middle">band cleared + tube clear</text>
+  <text class="sub" x="800" y="705" text-anchor="middle">stable 400 ms</text>
+
+  <rect class="score" x="1015" y="610" width="230" height="98"/>
+  <text class="text" x="1130" y="647" text-anchor="middle">Score</text>
+  <text class="sub" x="1130" y="674" text-anchor="middle">raw / available</text>
+  <text class="sub" x="1130" y="697" text-anchor="middle">normalize to 100</text>
+
+  <rect class="reset" x="545" y="735" width="230" height="60"/>
+  <text class="text" x="660" y="761" text-anchor="middle">Reset</text>
+  <text class="sub" x="660" y="783" text-anchor="middle">ล้าง Preferences</text>
+
+  <path class="line" d="M 210 138 L 270 138"/>
+  <path class="line" d="M 490 138 L 575 138"/>
+  <text class="label" x="515" y="122">otherwise</text>
+  <path class="line" d="M 780 138 C 820 118 835 103 870 103"/>
+  <text class="label" x="815" y="93">เริ่ม setup</text>
+  <path class="line" d="M 965 146 L 972 205"/>
+  <path class="line" d="M 972 291 C 945 350 850 408 825 435"/>
+
+  <path class="line" d="M 380 186 C 380 320 485 395 575 430"/>
+  <text class="label" x="400" y="320">offline + configured</text>
+  <path class="line" d="M 490 165 C 610 260 735 266 870 248"/>
+  <text class="label" x="585" y="252">offline + not configured</text>
+
+  <path class="line" d="M 700 500 C 620 572 325 582 185 610"/>
+  <path class="line" d="M 280 659 L 365 659"/>
+  <path class="line" d="M 585 659 L 670 659"/>
+  <path class="line" d="M 930 659 L 1015 659"/>
+  <path class="line" d="M 1130 708 C 1040 776 850 765 775 765"/>
+  <text class="label" x="930" y="755">เริ่มรอบใหม่</text>
+  <path class="line" d="M 545 765 C 365 760 205 735 185 708"/>
+  <path class="resetLine" d="M 545 765 C 360 690 312 330 575 181"/>
+</svg>

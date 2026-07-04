@@ -1,0 +1,85 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1320" height="680" viewBox="0 0 1320 680" role="img" aria-labelledby="title desc">
+  <title id="title">Suctioning Trainer system overview</title>
+  <desc id="desc">Overview of user, browser, ESP32-S3 firmware, web routes, state machine, sensors, preferences, and score calculation.</desc>
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#2f5d62"/>
+    </marker>
+    <style>
+      .bg { fill: #f7faf9; }
+      .card { fill: #ffffff; stroke: #b8c7c9; stroke-width: 2; rx: 12; }
+      .core { fill: #eef7f4; stroke: #2f5d62; stroke-width: 2.5; rx: 14; }
+      .sensor { fill: #fff7e8; stroke: #b9852c; stroke-width: 2; rx: 12; }
+      .store { fill: #f1efff; stroke: #6d5bd0; stroke-width: 2; rx: 12; }
+      .score { fill: #edf7ed; stroke: #3f7f46; stroke-width: 2; rx: 12; }
+      .text { font-family: system-ui, -apple-system, BlinkMacSystemFont, "Noto Sans Thai", Arial, sans-serif; fill: #173033; font-size: 21px; font-weight: 700; }
+      .sub { font-family: system-ui, -apple-system, BlinkMacSystemFont, "Noto Sans Thai", Arial, sans-serif; fill: #4c6265; font-size: 16px; font-weight: 500; }
+      .small { font-family: system-ui, -apple-system, BlinkMacSystemFont, "Noto Sans Thai", Arial, sans-serif; fill: #4c6265; font-size: 14px; font-weight: 500; }
+      .line { fill: none; stroke: #2f5d62; stroke-width: 2.5; marker-end: url(#arrow); }
+      .both { fill: none; stroke: #2f5d62; stroke-width: 2.5; marker-start: url(#arrow); marker-end: url(#arrow); }
+      .title { font-family: system-ui, -apple-system, BlinkMacSystemFont, "Noto Sans Thai", Arial, sans-serif; fill: #173033; font-size: 30px; font-weight: 800; }
+    </style>
+  </defs>
+  <rect class="bg" width="1320" height="680"/>
+  <text class="title" x="40" y="54">ภาพรวมระบบ Suctioning Trainer</text>
+
+  <rect class="card" x="45" y="130" width="190" height="112"/>
+  <text class="text" x="140" y="168" text-anchor="middle">User</text>
+  <text class="sub" x="140" y="196" text-anchor="middle">Phone / Computer</text>
+  <text class="small" x="140" y="220" text-anchor="middle">ผู้ใช้หน้าเว็บ</text>
+
+  <rect class="card" x="300" y="130" width="205" height="112"/>
+  <text class="text" x="402" y="168" text-anchor="middle">Browser</text>
+  <text class="sub" x="402" y="196" text-anchor="middle">เปิด 192.168.4.1</text>
+  <text class="small" x="402" y="220" text-anchor="middle">setup portal</text>
+
+  <rect class="core" x="585" y="96" width="275" height="178"/>
+  <text class="text" x="722" y="136" text-anchor="middle">ESP32-S3</text>
+  <text class="sub" x="722" y="164" text-anchor="middle">Suction_arduinoCode.ino</text>
+  <text class="small" x="722" y="194" text-anchor="middle">setup(), loop()</text>
+  <text class="small" x="722" y="220" text-anchor="middle">web routes + state machine</text>
+  <text class="small" x="722" y="246" text-anchor="middle">sensor logic + scoring</text>
+
+  <rect class="core" x="930" y="66" width="300" height="154"/>
+  <text class="text" x="1080" y="102" text-anchor="middle">WebServer + DNSServer</text>
+  <text class="sub" x="1080" y="130" text-anchor="middle">HTTP routes</text>
+  <text class="small" x="1080" y="156" text-anchor="middle">/, /live.json, /sensors</text>
+  <text class="small" x="1080" y="180" text-anchor="middle">/sensor-raw.json, /calibrate</text>
+  <text class="small" x="1080" y="204" text-anchor="middle">/start-insert, /reset</text>
+
+  <rect class="core" x="930" y="265" width="300" height="108"/>
+  <text class="text" x="1080" y="306" text-anchor="middle">SetupContext + AppState</text>
+  <text class="sub" x="1080" y="334" text-anchor="middle">current state, session flags</text>
+  <text class="small" x="1080" y="358" text-anchor="middle">sensor values, pressure reference</text>
+
+  <rect class="sensor" x="95" y="470" width="245" height="118"/>
+  <text class="text" x="218" y="508" text-anchor="middle">Light sensors</text>
+  <text class="sub" x="218" y="536" text-anchor="middle">neck, 6 cm, 8 cm</text>
+  <text class="small" x="218" y="562" text-anchor="middle">GPIO 15,16,9,17,10</text>
+
+  <rect class="sensor" x="395" y="470" width="260" height="118"/>
+  <text class="text" x="525" y="508" text-anchor="middle">Pressure sensor</text>
+  <text class="sub" x="525" y="536" text-anchor="middle">HX710B 24-bit</text>
+  <text class="small" x="525" y="562" text-anchor="middle">27 pulses, 40Hz mode</text>
+  <text class="small" x="525" y="584" text-anchor="middle">DOUT GPIO4 / SCK GPIO5</text>
+
+  <rect class="store" x="720" y="470" width="225" height="118"/>
+  <text class="text" x="832" y="508" text-anchor="middle">Preferences</text>
+  <text class="sub" x="832" y="536" text-anchor="middle">device_cfg</text>
+  <text class="small" x="832" y="562" text-anchor="middle">mode, Wi-Fi, calibration</text>
+
+  <rect class="score" x="1010" y="470" width="245" height="118"/>
+  <text class="text" x="1132" y="508" text-anchor="middle">Score</text>
+  <text class="sub" x="1132" y="536" text-anchor="middle">depth, time, contact</text>
+  <text class="small" x="1132" y="562" text-anchor="middle">pressure when available</text>
+  <text class="small" x="1132" y="584" text-anchor="middle">normalize to 100</text>
+
+  <path class="both" d="M 235 186 L 300 186"/>
+  <path class="both" d="M 505 186 L 585 186"/>
+  <path class="both" d="M 860 142 L 930 142"/>
+  <path class="both" d="M 860 238 L 930 308"/>
+  <path class="both" d="M 970 373 L 340 470"/>
+  <path class="both" d="M 1000 373 L 655 470"/>
+  <path class="both" d="M 1080 373 L 945 470"/>
+  <path class="line" d="M 1132 373 L 1132 470"/>
+</svg>

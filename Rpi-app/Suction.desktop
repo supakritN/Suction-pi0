@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=Suction Monitor
+Comment=ESP Sensor Monitor
+Exec=env DISPLAY=:0 /home/local/Documents/Suction/venv/bin/python /home/local/Documents/Suction/Rpi-app/main.py
+Icon=utilities-system-monitor
+Terminal=false
+Categories=Utility;

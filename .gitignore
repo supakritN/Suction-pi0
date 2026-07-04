@@ -1,0 +1,7 @@
+*.tmp
+*.log
+.DS_Store
+.vscode/
+build/
+
+venv

@@ -1,0 +1,79 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1300" height="720" viewBox="0 0 1300 720" role="img" aria-labelledby="title desc">
+  <title id="title">State machine</title>
+  <desc id="desc">Supported local/offline AppState transitions including app.boot saved config decisions.</desc>
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="8" markerHeight="8" orient="auto">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#35495d"/>
+    </marker>
+    <style>
+      .bg { fill: #f7faf9; }
+      .boot { fill: #ffffff; stroke: #35495d; stroke-width: 2.5; rx: 12; }
+      .state { fill: #ffffff; stroke: #aebfc4; stroke-width: 2; rx: 12; }
+      .active { fill: #eef7f4; stroke: #315b68; stroke-width: 2.5; rx: 12; }
+      .work { fill: #fff7e8; stroke: #b9852c; stroke-width: 2.5; rx: 12; }
+      .score { fill: #edf7ed; stroke: #3f7f46; stroke-width: 2.5; rx: 12; }
+      .title { font-family: system-ui, -apple-system, BlinkMacSystemFont, "Noto Sans Thai", Arial, sans-serif; fill: #173033; font-size: 30px; font-weight: 800; }
+      .text { font-family: system-ui, -apple-system, BlinkMacSystemFont, "Noto Sans Thai", Arial, sans-serif; fill: #173033; font-size: 18px; font-weight: 750; }
+      .sub { font-family: system-ui, -apple-system, BlinkMacSystemFont, "Noto Sans Thai", Arial, sans-serif; fill: #4c6265; font-size: 14px; font-weight: 500; }
+      .label { font-family: system-ui, -apple-system, BlinkMacSystemFont, "Noto Sans Thai", Arial, sans-serif; fill: #35495d; font-size: 13px; font-weight: 700; }
+      .line { fill: none; stroke: #35495d; stroke-width: 2.3; marker-end: url(#arrow); }
+      .reset { fill: none; stroke: #b84d4d; stroke-width: 2; stroke-dasharray: 8 7; marker-end: url(#arrow); }
+    </style>
+  </defs>
+  <rect class="bg" width="1300" height="720"/>
+  <text class="title" x="44" y="54">State Machine: local/offline flow</text>
+
+  <rect class="boot" x="55" y="95" width="205" height="94"/>
+  <text class="text" x="158" y="128" text-anchor="middle">app.boot()</text>
+  <text class="sub" x="158" y="154" text-anchor="middle">load Preferences</text>
+  <text class="sub" x="158" y="176" text-anchor="middle">เลือก state เริ่มต้น</text>
+
+  <rect class="active" x="345" y="120" width="205" height="86"/>
+  <text class="text" x="448" y="154" text-anchor="middle">ModeSelectState</text>
+  <text class="sub" x="448" y="180" text-anchor="middle">local/offline practice</text>
+
+  <rect class="state" x="675" y="120" width="205" height="86"/>
+  <text class="text" x="778" y="153" text-anchor="middle">CalibrateState</text>
+  <text class="sub" x="778" y="180" text-anchor="middle">light แล้ว pressure</text>
+
+  <rect class="active" x="1005" y="120" width="205" height="98"/>
+  <text class="text" x="1108" y="155" text-anchor="middle">ReadyState</text>
+  <text class="sub" x="1108" y="181" text-anchor="middle">precheck เมื่อกด</text>
+  <text class="sub" x="1108" y="203" text-anchor="middle">Start Practice</text>
+
+  <rect class="work" x="165" y="500" width="185" height="92"/>
+  <text class="text" x="258" y="535" text-anchor="middle">InsertState</text>
+  <text class="sub" x="258" y="562" text-anchor="middle">ใส่สาย + release</text>
+
+  <rect class="work" x="565" y="500" width="185" height="92"/>
+  <text class="text" x="658" y="535" text-anchor="middle">SuctionState</text>
+  <text class="sub" x="658" y="562" text-anchor="middle">ถอนสายจน clear</text>
+
+  <rect class="score" x="965" y="500" width="185" height="92"/>
+  <text class="text" x="1058" y="535" text-anchor="middle">ScoreState</text>
+  <text class="sub" x="1058" y="562" text-anchor="middle">สรุปคะแนน</text>
+
+  <path class="line" d="M 260 138 L 345 154"/>
+  <text class="label" x="285" y="120">otherwise</text>
+  <path class="line" d="M 260 170 C 390 242 530 190 675 163"/>
+  <text class="label" x="390" y="242">offline + not configured</text>
+  <path class="line" d="M 260 188 C 520 390 875 330 1005 188"/>
+  <text class="label" x="505" y="366">offline + configured</text>
+
+  <path class="line" d="M 550 163 L 675 163"/>
+  <text class="label" x="585" y="148">start setup</text>
+  <path class="line" d="M 880 163 L 1005 168"/>
+  <text class="label" x="915" y="148">calibration done</text>
+
+  <path class="line" d="M 1108 218 C 985 395 505 418 258 500"/>
+  <text class="label" x="740" y="397">Start Practice + precheck OK</text>
+  <path class="line" d="M 350 546 L 565 546"/>
+  <text class="label" x="410" y="533">release confirmed</text>
+  <path class="line" d="M 750 546 L 965 546"/>
+  <text class="label" x="815" y="533">tube exit confirmed</text>
+  <path class="line" d="M 1058 500 C 955 405 450 402 258 500"/>
+  <text class="label" x="610" y="437">start new practice</text>
+
+  <path class="reset" d="M 1108 218 C 1210 390 1198 640 930 666 C 610 700 315 676 448 206"/>
+  <text class="label" x="1174" y="410" fill="#b84d4d">reset</text>
+</svg>

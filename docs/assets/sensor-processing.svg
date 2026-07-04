@@ -1,0 +1,133 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1580" height="980" viewBox="0 0 1580 980" role="img" aria-labelledby="title desc">
+  <title id="title">Sensor processing pipeline</title>
+  <desc id="desc">Detailed processing for light sensors, pressure sensor, marker contact logic, release confirmation, suction exit confirmation, and score normalization.</desc>
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="8" markerHeight="8" orient="auto">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#315b68"/>
+    </marker>
+    <style>
+      .bg { fill: #f7faf9; }
+      .cal { fill: #eef7f4; stroke: #315b68; stroke-width: 2.5; rx: 12; }
+      .light { fill: #fff7e8; stroke: #b9852c; stroke-width: 2.5; rx: 12; }
+      .pressure { fill: #f1efff; stroke: #6d5bd0; stroke-width: 2.5; rx: 12; }
+      .state { fill: #ffffff; stroke: #aebfc4; stroke-width: 2.3; rx: 12; }
+      .score { fill: #edf7ed; stroke: #3f7f46; stroke-width: 2.5; rx: 12; }
+      .title { font-family: system-ui, -apple-system, BlinkMacSystemFont, "Noto Sans Thai", Arial, sans-serif; fill: #173033; font-size: 30px; font-weight: 800; }
+      .text { font-family: system-ui, -apple-system, BlinkMacSystemFont, "Noto Sans Thai", Arial, sans-serif; fill: #173033; font-size: 18px; font-weight: 750; }
+      .sub { font-family: system-ui, -apple-system, BlinkMacSystemFont, "Noto Sans Thai", Arial, sans-serif; fill: #4c6265; font-size: 13px; font-weight: 500; }
+      .label { font-family: system-ui, -apple-system, BlinkMacSystemFont, "Noto Sans Thai", Arial, sans-serif; fill: #315b68; font-size: 12px; font-weight: 700; }
+      .line { fill: none; stroke: #315b68; stroke-width: 2.25; marker-end: url(#arrow); }
+    </style>
+  </defs>
+  <rect class="bg" width="1580" height="980"/>
+  <text class="title" x="44" y="54">Sensor Processing ตาม code ปัจจุบัน</text>
+
+  <rect class="cal" x="60" y="95" width="185" height="86"/>
+  <text class="text" x="152" y="128" text-anchor="middle">Calibration</text>
+  <text class="sub" x="152" y="154" text-anchor="middle">อ่าน baseline ก่อนฝึก</text>
+
+  <rect class="cal" x="330" y="70" width="240" height="86"/>
+  <text class="text" x="450" y="103" text-anchor="middle">lightBaselines[5]</text>
+  <text class="sub" x="450" y="129" text-anchor="middle">average จาก light sensors</text>
+
+  <rect class="cal" x="330" y="190" width="240" height="86"/>
+  <text class="text" x="450" y="223" text-anchor="middle">pressure calibration</text>
+  <text class="sub" x="450" y="249" text-anchor="middle">zero raw + deadband</text>
+
+  <rect class="state" x="675" y="130" width="230" height="86"/>
+  <text class="text" x="790" y="163" text-anchor="middle">Ready precheck</text>
+  <text class="sub" x="790" y="189" text-anchor="middle">ต้องผ่านก่อน Insert</text>
+
+  <rect class="light" x="55" y="360" width="190" height="86"/>
+  <text class="text" x="150" y="393" text-anchor="middle">อ่าน light sensor</text>
+  <text class="sub" x="150" y="419" text-anchor="middle">GPIO 15,16,9,17,10</text>
+
+  <rect class="light" x="315" y="360" width="210" height="86"/>
+  <text class="text" x="420" y="393" text-anchor="middle">เทียบ baseline</text>
+  <text class="sub" x="420" y="419" text-anchor="middle">signed / absolute delta</text>
+
+  <rect class="light" x="595" y="330" width="230" height="112"/>
+  <text class="text" x="710" y="364" text-anchor="middle">detect / clear</text>
+  <text class="sub" x="710" y="390" text-anchor="middle">candidate thresholds</text>
+  <text class="sub" x="710" y="414" text-anchor="middle">onCount / offCount</text>
+
+  <rect class="light" x="895" y="330" width="220" height="112"/>
+  <text class="text" x="1005" y="364" text-anchor="middle">debounce</text>
+  <text class="sub" x="1005" y="390" text-anchor="middle">LIGHT_DEBOUNCE_COUNT</text>
+  <text class="sub" x="1005" y="414" text-anchor="middle">update lightDetected[]</text>
+
+  <rect class="light" x="1190" y="300" width="240" height="92"/>
+  <text class="text" x="1310" y="334" text-anchor="middle">Depth</text>
+  <text class="sub" x="1310" y="360" text-anchor="middle">deepest detected sensor</text>
+
+  <rect class="light" x="1190" y="430" width="270" height="128"/>
+  <text class="text" x="1325" y="464" text-anchor="middle">Contact marker</text>
+  <text class="sub" x="1325" y="490" text-anchor="middle">neck index 0 signed delta</text>
+  <text class="sub" x="1325" y="514" text-anchor="middle">band on/off debounce</text>
+  <text class="sub" x="1325" y="538" text-anchor="middle">compare expected 6 / 8 cm</text>
+
+  <rect class="pressure" x="55" y="675" width="205" height="96"/>
+  <text class="text" x="158" y="710" text-anchor="middle">HX710B raw</text>
+  <text class="sub" x="158" y="736" text-anchor="middle">24-bit, 27 pulses</text>
+
+  <rect class="pressure" x="330" y="675" width="210" height="96"/>
+  <text class="text" x="435" y="710" text-anchor="middle">signExtend24()</text>
+  <text class="sub" x="435" y="736" text-anchor="middle">แปลงเป็น signed raw</text>
+
+  <rect class="pressure" x="610" y="675" width="225" height="96"/>
+  <text class="text" x="722" y="710" text-anchor="middle">trimmed average</text>
+  <text class="sub" x="722" y="736" text-anchor="middle">ตัด min/max เมื่อ sample พอ</text>
+
+  <rect class="pressure" x="905" y="675" width="235" height="112"/>
+  <text class="text" x="1022" y="708" text-anchor="middle">rawToDeltaRaw()</text>
+  <text class="sub" x="1022" y="734" text-anchor="middle">zero + deadband</text>
+  <text class="sub" x="1022" y="758" text-anchor="middle">active direction = -1</text>
+
+  <rect class="pressure" x="1210" y="675" width="235" height="112"/>
+  <text class="text" x="1328" y="708" text-anchor="middle">folded / ready</text>
+  <text class="sub" x="1328" y="734" text-anchor="middle">fold min / ready min</text>
+  <text class="sub" x="1328" y="758" text-anchor="middle">release candidate</text>
+
+  <rect class="pressure" x="610" y="840" width="250" height="96"/>
+  <text class="text" x="735" y="875" text-anchor="middle">Release confirmed</text>
+  <text class="sub" x="735" y="901" text-anchor="middle">drop + ratio + hold 200 ms</text>
+
+  <rect class="state" x="955" y="840" width="230" height="96"/>
+  <text class="text" x="1070" y="875" text-anchor="middle">SuctionState</text>
+  <text class="sub" x="1070" y="901" text-anchor="middle">withdraw tube</text>
+
+  <rect class="state" x="1265" y="825" width="260" height="126"/>
+  <text class="text" x="1395" y="858" text-anchor="middle">Tube exit confirmed</text>
+  <text class="sub" x="1395" y="884" text-anchor="middle">exit bands passed</text>
+  <text class="sub" x="1395" y="908" text-anchor="middle">band cleared + no inside</text>
+  <text class="sub" x="1395" y="932" text-anchor="middle">clear stable 400 ms</text>
+
+  <rect class="score" x="970" y="95" width="300" height="132"/>
+  <text class="text" x="1120" y="132" text-anchor="middle">ScoreState</text>
+  <text class="sub" x="1120" y="160" text-anchor="middle">depth + duration + contact</text>
+  <text class="sub" x="1120" y="184" text-anchor="middle">+ pressure when available</text>
+  <text class="sub" x="1120" y="208" text-anchor="middle">raw / available -> 100</text>
+
+  <path class="line" d="M 245 128 L 330 112"/>
+  <path class="line" d="M 245 154 L 330 225"/>
+  <path class="line" d="M 570 112 C 618 112 630 150 675 158"/>
+  <path class="line" d="M 570 225 C 620 225 632 190 675 182"/>
+  <path class="line" d="M 790 216 C 720 305 255 300 150 360"/>
+  <path class="line" d="M 245 403 L 315 403"/>
+  <path class="line" d="M 525 403 L 595 390"/>
+  <path class="line" d="M 825 386 L 895 386"/>
+  <path class="line" d="M 1115 370 L 1190 345"/>
+  <path class="line" d="M 1115 410 L 1190 490"/>
+  <path class="line" d="M 1310 300 C 1265 240 1190 226 1130 227"/>
+  <path class="line" d="M 1325 430 C 1285 300 1215 230 1138 227"/>
+
+  <path class="line" d="M 790 216 C 700 605 295 625 158 675"/>
+  <path class="line" d="M 260 723 L 330 723"/>
+  <path class="line" d="M 540 723 L 610 723"/>
+  <path class="line" d="M 835 723 L 905 723"/>
+  <path class="line" d="M 1140 731 L 1210 731"/>
+  <path class="line" d="M 1328 787 C 1240 840 955 842 860 888"/>
+  <path class="line" d="M 860 888 L 955 888"/>
+  <path class="line" d="M 1185 888 L 1265 888"/>
+  <path class="line" d="M 1395 825 C 1370 500 1255 265 1145 227"/>
+</svg>
