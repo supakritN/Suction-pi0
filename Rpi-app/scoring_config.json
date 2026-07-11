@@ -1,0 +1,58 @@
+{
+  "version": 1,
+  "weights": {
+    "depth": 30,
+    "duration": 20,
+    "pressure": 20,
+    "contact": 30
+  },
+  "categories": {
+    "depth": {
+      "unit": "cm",
+      "metric": "maxDepthCm",
+      "bands": [
+        { "max": 0,    "fraction": 1.0, "label": "No over-insertion" },
+        { "max": 6,    "fraction": 0.5, "label": "Reached 6 cm" },
+        { "max": null, "fraction": 0.0, "label": "Too deep" }
+      ]
+    },
+    "duration": {
+      "unit": "s",
+      "metric": "durationSec",
+      "bands": [
+        { "max": 10,   "fraction": 1.0, "label": "Within 10 s" },
+        { "max": 15,   "fraction": 0.5, "label": "Within 15 s" },
+        { "max": null, "fraction": 0.0, "label": "Too slow" }
+      ]
+    },
+    "pressure": {
+      "unit": "mmHg",
+      "metric": "pressureMmHg",
+      "optional": true,
+      "range_bands": [
+        { "min": 80,   "max": 120,  "fraction": 1.0, "label": "Standard" },
+        { "min": 70,   "max": 130,  "fraction": 0.5, "label": "Slightly off" },
+        { "min": null, "max": null, "fraction": 0.0, "label": "Out of range" }
+      ]
+    },
+    "contact": {
+      "unit": "events",
+      "metric": "contactEvents",
+      "bands": [
+        { "max": 0,    "fraction": 1.0, "label": "No contact events" },
+        { "max": 2,    "fraction": 0.5, "label": "1-2 events" },
+        { "max": null, "fraction": 0.0, "label": "Too many events" }
+      ]
+    }
+  },
+  "levels": [
+    { "min": 90, "label": "Excellent",         "note": "Ready for real patient practice." },
+    { "min": 70, "label": "Acceptable",        "note": "Repeat practice for weak points." },
+    { "min": 50, "label": "Needs Improvement", "note": "Not ready for real patient practice." },
+    { "min": 0,  "label": "Unsafe",            "note": "Immediate correction required." }
+  ],
+  "settings": {
+    "pin_required": true,
+    "instructor_pin": "0000"
+  }
+}
