@@ -35,12 +35,18 @@ class SuctionApp(tk.Tk):
     def __init__(self):
         super().__init__()
         self.title("Suction Trainer")
-        try:
-            self.attributes("-fullscreen", True)
-        except Exception:
-            self.geometry("1024x600")
         self.configure(bg=theme.BG)
         self.bind("<Escape>", lambda e: self.quit_app())
+
+        # Force the window to the real screen size, then assert fullscreen.
+        # On the Pi's window manager (and over VNC) a fullscreen request made
+        # before the window is mapped is silently ignored, so we also re-assert
+        # it once the event loop has realized the window.
+        self.update_idletasks()
+        sw, sh = self.winfo_screenwidth(), self.winfo_screenheight()
+        self.geometry(f"{sw}x{sh}+0+0")
+        self._go_fullscreen()
+        self.after(200, self._go_fullscreen)
 
         # shared session state
         self.username = None
@@ -107,6 +113,16 @@ class SuctionApp(tk.Tk):
             except Exception:
                 pass
             self._poll_id = None
+
+    def _go_fullscreen(self):
+        """Assert true fullscreen; ignore WMs that don't support the attribute."""
+        try:
+            self.attributes("-fullscreen", True)
+        except tk.TclError:
+            # Fallback for window managers without -fullscreen support.
+            self.overrideredirect(True)
+            sw, sh = self.winfo_screenwidth(), self.winfo_screenheight()
+            self.geometry(f"{sw}x{sh}+0+0")
 
     def quit_app(self):
         self.clear_poll()
