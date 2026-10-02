@@ -6,11 +6,20 @@ the sensor node) lives on the app instance so screens stay stateless.
 """
 from __future__ import annotations
 
+import os
 import tkinter as tk
+from pathlib import Path
 
 from ..serial_node import SensorNode
 from . import theme
+
+_ICON_CANDIDATES = [
+    "/home/local/.local/share/icons/suction-trainer.png",
+    str(Path(__file__).resolve().parent.parent.parent / "assets" / "icon.png"),
+]
 from .screens import (
+    calibrate,
+    history,
     mode_select,
     name as name_screen,
     preparation,
@@ -24,8 +33,10 @@ SCREENS = {
     "name": name_screen.render,
     "mode_select": mode_select.render,
     "preparation": preparation.render,
+    "calibrate": calibrate.render,
     "process": process.render,
     "results": results.render,
+    "history": history.render,
     "room": room.render,
     "settings": settings.render,
 }
@@ -34,17 +45,33 @@ SCREENS = {
 class SuctionApp(tk.Tk):
     def __init__(self):
         super().__init__()
+        # WM class — taskbars match this against the .desktop file's
+        # StartupWMClass to show the correct icon.
+        try:
+            self.wm_class("SuctionTrainer", "SuctionTrainer")
+        except Exception:
+            pass
         self.title("Suction Trainer")
         self.configure(bg=theme.BG)
         self.bind("<Escape>", lambda e: self.quit_app())
+        # Window icon (keep PhotoImage ref so it isn't GC'd)
+        for p in _ICON_CANDIDATES:
+            if not os.path.exists(p):
+                continue
+            try:
+                self._icon_img = tk.PhotoImage(file=p)
+                self.wm_iconphoto(True, self._icon_img)
+                break
+            except Exception:
+                continue
 
         # Force the window to the real screen size, then assert fullscreen.
         # On the Pi's window manager (and over VNC) a fullscreen request made
         # before the window is mapped is silently ignored, so we also re-assert
         # it once the event loop has realized the window.
         self.update_idletasks()
-        sw, sh = self.winfo_screenwidth(), self.winfo_screenheight()
-        self.geometry(f"{sw}x{sh}+0+0")
+        geom = self._preferred_geometry()
+        self.geometry(geom)
         self._go_fullscreen()
         self.after(200, self._go_fullscreen)
 
@@ -114,6 +141,52 @@ class SuctionApp(tk.Tk):
                 pass
             self._poll_id = None
 
+    def _preferred_geometry(self) -> str:
+        """
+        Prefer the HDMI output when it's connected (wireless HDMI, external
+        monitor, etc.). If only the built-in DSI touchscreen is present,
+        fall back to the primary display.
+
+        Honors SUCTION_OUTPUT=<name> to force a specific output.
+        """
+        import subprocess, re, os
+        prefer = os.environ.get("SUCTION_OUTPUT")  # e.g. "HDMI-A-1" or "DSI-1"
+        try:
+            txt = subprocess.check_output(["wlr-randr"], text=True,
+                                          stderr=subprocess.DEVNULL, timeout=1.5)
+        except Exception:
+            txt = ""
+        outputs = []
+        cur = None
+        for line in txt.splitlines():
+            m = re.match(r"^(\S+)\s+\"", line)
+            if m:
+                cur = {"name": m.group(1)}
+                outputs.append(cur)
+                continue
+            if cur is None:
+                continue
+            m = re.match(r"\s+Position:\s+(\d+),(\d+)", line)
+            if m:
+                cur["x"] = int(m.group(1)); cur["y"] = int(m.group(2))
+            m = re.match(r"\s+([\d]+)x([\d]+)\s+px.*\(preferred, current\)", line)
+            if m:
+                cur["w"] = int(m.group(1)); cur["h"] = int(m.group(2))
+
+        chosen = None
+        if prefer:
+            chosen = next((o for o in outputs if o.get("name") == prefer), None)
+        if not chosen:
+            # Prefer HDMI if present, else first output
+            chosen = next((o for o in outputs if "HDMI" in o.get("name", "")), None)
+            if not chosen and outputs:
+                chosen = outputs[0]
+
+        if chosen and {"x", "y", "w", "h"} <= chosen.keys():
+            return f"{chosen['w']}x{chosen['h']}+{chosen['x']}+{chosen['y']}"
+        sw, sh = self.winfo_screenwidth(), self.winfo_screenheight()
+        return f"{sw}x{sh}+0+0"
+
     def _go_fullscreen(self):
         """Assert true fullscreen; ignore WMs that don't support the attribute."""
         try:
@@ -121,8 +194,7 @@ class SuctionApp(tk.Tk):
         except tk.TclError:
             # Fallback for window managers without -fullscreen support.
             self.overrideredirect(True)
-            sw, sh = self.winfo_screenwidth(), self.winfo_screenheight()
-            self.geometry(f"{sw}x{sh}+0+0")
+            self.geometry(self._preferred_geometry())
 
     def quit_app(self):
         self.clear_poll()

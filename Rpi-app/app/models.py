@@ -15,6 +15,10 @@ class SensorStatus:
     id: str
     ok: bool
     label: str = ""
+    detail: str = ""        # debug info (pin, ADC value)
+    present: bool = True    # False if firmware doesn't report this sensor
+    side: str = ""          # "throat" | "mouth" | "pressure"
+    disabled: bool = False  # True if user disabled this pin in config
 
 
 @dataclass

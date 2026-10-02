@@ -5,3 +5,11 @@
 build/
 
 venv
+
+# Python bytecode
+__pycache__/
+*.pyc
+
+# Runtime data (contains practice run records)
+Rpi-app/results.csv
+Rpi-app/room_results.csv

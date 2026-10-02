@@ -25,7 +25,10 @@ def render(app, parent, **kw):
     _tile(tiles, 2, "📴", "Offline", "Just this device",
           lambda: _offline(app))
 
-    w.ghost_button(frame, "⚙  Scoring settings", lambda: app.show("settings")).pack(anchor="w", pady=(26, 0))
+    foot = tk.Frame(frame, bg=theme.BG)
+    foot.pack(anchor="w", pady=(26, 0))
+    w.ghost_button(foot, "⚙  Scoring settings", lambda: app.show("settings")).pack(side="left")
+    w.ghost_button(foot, "📋  History",         lambda: app.show("history")).pack(side="left", padx=(10, 0))
 
 
 def _tile(parent, col, icon, label, hint, command):
