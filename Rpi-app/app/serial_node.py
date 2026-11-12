@@ -32,11 +32,41 @@ _PINS_CONFIG_PATH = Path(__file__).resolve().parent.parent / "pins_config.json"
 _DEFAULT_ENABLED_PINS = {4, 5, 6, 7, 15}
 
 
-def _load_config() -> dict:
+# Factory calibration recorded on the trainer (tools/build_default_calibration.py).
+_DEFAULT_CAL_PATH = Path(__file__).resolve().parent.parent / "calibration_default.json"
+_DEFAULT_CAL_KEYS = ("enabled_pins", "roles", "trigger_delta_overrides", "calibrated_levels")
+
+_cfg_cache: dict = {"mtime": None, "data": {}}
+
+
+def load_default_calibration() -> dict:
     try:
-        return json.loads(_PINS_CONFIG_PATH.read_text())
+        return json.loads(_DEFAULT_CAL_PATH.read_text())
     except Exception:
         return {}
+
+
+def _load_config() -> dict:
+    """pins_config.json, re-read only when the file changes (UI polls this often).
+    Without a pins_config.json the factory calibration is used."""
+    try:
+        mtime = _PINS_CONFIG_PATH.stat().st_mtime_ns
+    except OSError:
+        d = load_default_calibration()
+        return {k: d[k] for k in _DEFAULT_CAL_KEYS if k in d}
+    if mtime != _cfg_cache["mtime"]:
+        try:
+            _cfg_cache["data"] = json.loads(_PINS_CONFIG_PATH.read_text())
+        except Exception:
+            _cfg_cache["data"] = {}
+        _cfg_cache["mtime"] = mtime
+    return dict(_cfg_cache["data"])
+
+
+def _write_config(cfg: dict) -> None:
+    tmp = _PINS_CONFIG_PATH.with_suffix(".json.tmp")
+    tmp.write_text(json.dumps(cfg, indent=2))
+    tmp.replace(_PINS_CONFIG_PATH)
 
 
 def load_enabled_pins() -> set[int]:
@@ -68,22 +98,112 @@ def save_enabled_pins(pins: set[int]) -> None:
     try:
         cfg = _load_config()
         cfg["enabled_pins"] = sorted(pins)
-        _PINS_CONFIG_PATH.write_text(json.dumps(cfg, indent=2))
+        _write_config(cfg)
     except Exception:
         pass
 
 
-def save_calibration(thresholds: dict[int, int]) -> None:
-    """Persist per-pin trigger_delta_overrides computed from a calibration run."""
+def save_calibration(thresholds: dict[int, int],
+                     baseline: Optional[dict[int, int]] = None,
+                     triggered: Optional[dict[int, int]] = None) -> None:
+    """Persist per-pin thresholds (+ the measured tube-out / tube-in levels,
+    which the detector uses to recover if a session starts with the tube in)."""
     try:
         cfg = _load_config()
         cfg["trigger_delta_overrides"] = {str(pin): int(thr)
                                            for pin, thr in thresholds.items()}
+        if baseline and triggered:
+            cfg["calibrated_levels"] = {
+                str(pin): [int(baseline[pin]), int(triggered[pin])]
+                for pin in thresholds
+                if baseline.get(pin, -1) >= 0 and triggered.get(pin, -1) >= 0
+            }
         from datetime import datetime
         cfg["calibrated_at"] = datetime.now().isoformat(timespec="seconds")
-        _PINS_CONFIG_PATH.write_text(json.dumps(cfg, indent=2))
+        cfg["calibration_source"] = "auto"
+        _write_config(cfg)
     except Exception:
         pass
+
+
+def apply_default_calibration() -> bool:
+    """Load the factory calibration into pins_config.json (Calibrate screen
+    button). Auto-calibrate can overwrite it again at any time."""
+    d = load_default_calibration()
+    if not d:
+        return False
+    cfg = _load_config()
+    for k in _DEFAULT_CAL_KEYS:
+        if k in d:
+            cfg[k] = d[k]
+    cfg["calibrated_at"] = f"factory default ({d.get('recorded_at', '?')})"
+    cfg["calibration_source"] = "default"
+    _write_config(cfg)
+    return True
+
+
+def save_regression_calibration(result: dict) -> None:
+    """Persist a factory + linear-regression calibration (app/regression.py)."""
+    d = load_default_calibration()
+    cfg = _load_config()
+    for k in ("enabled_pins", "roles"):
+        if k in d:
+            cfg[k] = d[k]
+    cfg["trigger_delta_overrides"] = result["trigger_delta_overrides"]
+    cfg["calibrated_levels"] = result["calibrated_levels"]
+    cfg["regression"] = {
+        str(pin): {"a": round(p["a"], 4), "b": round(p["b"], 2),
+                   "r2": None if p["r2"] is None else round(p["r2"], 4),
+                   "mode": p["mode"], "points": p["points"]}
+        for pin, p in result["pins"].items()
+    }
+    from datetime import datetime
+    cfg["calibrated_at"] = datetime.now().isoformat(timespec="seconds")
+    cfg["calibration_source"] = "regression"
+    _write_config(cfg)
+
+
+def load_roles():
+    """Which GPIOs mean entry / 9 cm / 11 cm (pins_config "roles"); legacy
+    layout (Cap = GPIO 4) when not configured."""
+    from .detector import Roles
+    raw = _load_config().get("roles")
+    if not isinstance(raw, dict):
+        return Roles()
+    try:
+        return Roles(entry=tuple(int(p) for p in raw.get("entry", [])),
+                     d9=tuple(int(p) for p in raw.get("d9", [])),
+                     d11=tuple(int(p) for p in raw.get("d11", [])))
+    except Exception:
+        return Roles()
+
+
+def load_calibrated_levels() -> dict[int, tuple]:
+    """{pin: (tube_out, tube_in[, tube-in at other depths…])} from the last
+    calibration, if any."""
+    out = {}
+    for k, v in _load_config().get("calibrated_levels", {}).items():
+        try:
+            levels = tuple(int(x) for x in v)
+            if len(levels) >= 2:
+                out[int(k)] = levels
+        except Exception:
+            continue
+    return out
+
+
+def calibration_summary() -> str:
+    """Short human label for the calibration currently in use."""
+    cfg = _load_config()
+    src = cfg.get("calibration_source")
+    at = str(cfg.get("calibrated_at", ""))
+    if src == "default":
+        return "Factory defaults"
+    if src == "regression":
+        return f"Factory + regression ({at.replace('T', ' ')[:16]})"
+    if src == "auto" or at:
+        return f"Your calibration ({at.replace('T', ' ')[:16]})" if at else "Your calibration"
+    return "Not calibrated"
 
 
 def load_calibrated_at() -> str:
@@ -93,7 +213,8 @@ def load_calibrated_at() -> str:
 BAUD_RATE = 115200
 _ADC_FAULT_LOW   = 20
 _ADC_FAULT_HIGH  = 4075
-_STALE_SEC       = 2.0
+_STALE_SEC       = 1.0
+_EMA_ALPHA       = 0.35    # per-sample smoothing; ~50 ms time constant at 50 lines/s
 _HISTORY_LEN     = 15      # per-pin rolling window for stability check
 _FLOAT_RANGE_MIN = 400     # max-min over window → "pin is floating" (not wired)
 
@@ -128,7 +249,14 @@ def use_sim() -> bool:
 
 
 def find_esp() -> Optional[str]:
-    """Return any USB serial device, or None. Works on any USB port."""
+    """Return any USB serial device, or None. Works on any USB port.
+
+    SUCTION_PORT overrides detection: a device path (/dev/ttyACM0, COM5) or a
+    pyserial URL such as socket://127.0.0.1:7777 (used by tools/fake_esp.py).
+    """
+    override = os.environ.get("SUCTION_PORT")
+    if override:
+        return override
     try:
         from serial.tools import list_ports
     except ImportError:
@@ -153,6 +281,7 @@ class SensorNode:
     def __init__(self, sim: Optional[bool] = None) -> None:
         self.sim = use_sim() if sim is None else sim
         self._pin_value: dict[int, int] = {}
+        self._pin_smooth: dict[int, float] = {}
         self._pin_history: dict[int, list[int]] = {}  # for stability / floating detection
         self._last_rx: float = 0.0
         self._connected: bool = False
@@ -186,16 +315,22 @@ class SensorNode:
         with self._lock:
             self._connected = False
             self._pin_value = {}
+            self._pin_smooth = {}
             self._pin_history = {}
 
     def _set_pin_values(self, values: dict[int, int]) -> None:
         with self._lock:
-            self._pin_value = values
+            self._pin_value.update(values)
+            sm = self._pin_smooth
             for pin, v in values.items():
                 h = self._pin_history.setdefault(pin, [])
                 h.append(v)
                 if len(h) > _HISTORY_LEN:
                     del h[0]
+                # median-of-3 kills single-sample spikes, then EMA smooths noise
+                m = sorted(h[-3:])[len(h[-3:]) // 2]
+                prev = sm.get(pin)
+                sm[pin] = m if prev is None else prev + _EMA_ALPHA * (m - prev)
             self._last_rx = time.monotonic()
             self._connected = True
 
@@ -208,7 +343,31 @@ class SensorNode:
             return [self._pin_value.get(pin, -1) for (_, _, pin, _) in SENSOR_LAYOUT]
 
     def get_pin_values(self) -> dict[int, int]:
-        """Raw ADC values keyed by GPIO pin. Empty if port is stale."""
+        """Smoothed ADC values keyed by GPIO pin. Empty if port is stale.
+
+        Smoothing runs at the full serial rate (~100 Hz) in the reader thread,
+        so the UI's slower poll sees a steady value instead of a random noisy
+        sample.
+        """
+        with self._lock:
+            if not self._fresh_locked():
+                return {}
+            return {p: int(round(v)) for p, v in self._pin_smooth.items()}
+
+    def get_smoothed(self, n: int = 10) -> dict[int, int]:
+        """Mean of the last n raw samples per pin (≈ n × 20 ms)."""
+        with self._lock:
+            if not self._fresh_locked():
+                return {}
+            out = {}
+            for pin, h in self._pin_history.items():
+                tail = h[-n:]
+                if tail:
+                    out[pin] = sum(tail) // len(tail)
+            return out
+
+    def get_raw_pin_values(self) -> dict[int, int]:
+        """Last raw (unsmoothed) ADC values keyed by GPIO pin."""
         with self._lock:
             if not self._fresh_locked():
                 return {}
@@ -231,7 +390,8 @@ class SensorNode:
         enabled = load_enabled_pins()
         with self._lock:
             fresh = self._fresh_locked()
-            pv = dict(self._pin_value) if fresh else {}
+            # smoothed values for display; raw history drives fault detection
+            pv = {p: int(round(v)) for p, v in self._pin_smooth.items()} if fresh else {}
             hist = {p: list(h) for p, h in self._pin_history.items()} if fresh else {}
 
         out: list[SensorStatus] = []
@@ -260,7 +420,11 @@ class SensorNode:
             h = hist.get(pin, [])
 
             if len(h) >= _HISTORY_LEN:
-                rng = max(h) - min(h)
+                # 20th–80th percentile spread: noise spikes can't flip a good
+                # pin to "floating" (blinking dot); a floating pin spans ~2400
+                srt = sorted(h)
+                n = len(srt)
+                rng = srt[n * 4 // 5] - srt[n // 5]
                 avg = sum(h) // len(h)
                 if rng >= _FLOAT_RANGE_MIN:
                     out.append(SensorStatus(
@@ -317,6 +481,12 @@ class SensorNode:
 
     # ── line parsing ──────────────────────────────────────
     def _handle_line(self, line: str) -> None:
+        try:
+            self._parse_line(line)
+        except (ValueError, IndexError):
+            pass  # garbled / partial line — drop the line, never the connection
+
+    def _parse_line(self, line: str) -> None:
         line = line.strip()
         if not line:
             return
@@ -406,18 +576,48 @@ class SensorNode:
                 self._mark_disconnected()
                 time.sleep(1)
                 continue
+            ser = None
             try:
-                self._serial = serial.Serial(port, BAUD_RATE, timeout=1)
-                while not self._stop.is_set():
-                    line = self._serial.readline().decode(errors="ignore")
-                    if line:
-                        self._handle_line(line)
-                    elif (time.monotonic() - self._last_rx) > _STALE_SEC:
-                        self._mark_disconnected()
+                if "://" in port:
+                    ser = serial.serial_for_url(port, BAUD_RATE, timeout=0.2)
+                else:
+                    # exclusive: a second app instance can't steal half the stream
+                    kw = {"exclusive": True} if os.name == "posix" else {}
+                    ser = serial.Serial(port, BAUD_RATE, timeout=0.2, **kw)
+                ser.reset_input_buffer()   # drop stale bytes queued before we opened
+                self._serial = ser
+                self._read_lines(ser)
             except Exception:
+                pass
+            finally:
                 self._serial = None
-                self._mark_disconnected()
-                time.sleep(1)
+                if ser is not None:
+                    try:
+                        ser.close()
+                    except Exception:
+                        pass
+            self._mark_disconnected()
+            time.sleep(1)
+
+    def _read_lines(self, ser) -> None:
+        """Read in chunks and split lines ourselves. pyserial's readline() does
+        one syscall per byte, which costs ~30% of a Pi 3 core at 50 lines/s
+        and starves the UI thread of the GIL."""
+        buf = b""
+        synced = False   # the first fragment after open usually starts mid-line
+        while not self._stop.is_set():
+            chunk = ser.read(ser.in_waiting or 1)
+            if chunk:
+                buf += chunk
+                *lines, buf = buf.split(b"\n")
+                for raw in lines:
+                    if synced:
+                        self._handle_line(raw.decode(errors="ignore"))
+                    synced = True
+                if len(buf) > 4096:    # no newline for ages → garbage, resync
+                    buf, synced = b"", False
+            elif (time.monotonic() - self._last_rx) > _STALE_SEC:
+                return
 
     # ── simulation ────────────────────────────────────────
     def _sim_loop(self) -> None:

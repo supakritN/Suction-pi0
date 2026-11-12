@@ -18,10 +18,11 @@ def render(app, parent, **kw):
     for i in range(3):
         tiles.columnconfigure(i, weight=1, uniform="tiles")
 
-    _tile(tiles, 0, "➕", "Create room", "Host a session on this Pi",
-          lambda: _create(app))
-    _tile(tiles, 1, "🔗", "Join room", "Enter the host's address",
-          lambda: _join(app, frame))
+    # Room modes are parked for now — offline only. Re-enable with enabled=True.
+    _tile(tiles, 0, "➕", "Create room", "Coming soon",
+          lambda: _create(app), enabled=False)
+    _tile(tiles, 1, "🔗", "Join room", "Coming soon",
+          lambda: _join(app, frame), enabled=False)
     _tile(tiles, 2, "📴", "Offline", "Just this device",
           lambda: _offline(app))
 
@@ -31,19 +32,25 @@ def render(app, parent, **kw):
     w.ghost_button(foot, "📋  History",         lambda: app.show("history")).pack(side="left", padx=(10, 0))
 
 
-def _tile(parent, col, icon, label, hint, command):
-    btn = tk.Button(parent, command=command, bg=theme.SURFACE, fg=theme.TEXT,
-                    activebackground=theme.SURFACE2, activeforeground=theme.TEXT,
-                    relief="flat", bd=0, cursor="hand2", highlightthickness=1,
-                    highlightbackground=theme.BORDER)
-    inner = tk.Frame(btn, bg=theme.SURFACE)
-    tk.Label(inner, text=icon, bg=theme.SURFACE, fg=theme.ACCENT, font=theme.font(34)).pack(pady=(18, 4))
-    tk.Label(inner, text=label, bg=theme.SURFACE, fg=theme.TEXT, font=theme.font(20, "bold")).pack()
-    tk.Label(inner, text=hint, bg=theme.SURFACE, fg=theme.MUTED, font=theme.SMALL).pack(pady=(2, 18))
+def _tile(parent, col, icon, label, hint, command, enabled=True):
+    bg  = theme.SURFACE if enabled else theme.SURFACE2
+    ink = theme.TEXT if enabled else theme.MUTED
+    btn = tk.Button(parent, command=command if enabled else None, bg=bg, fg=ink,
+                    activebackground=theme.SURFACE2 if enabled else bg,
+                    activeforeground=ink, relief="flat", bd=0,
+                    cursor="hand2" if enabled else "arrow", highlightthickness=1,
+                    highlightbackground=theme.BORDER,
+                    state="normal" if enabled else "disabled")
+    inner = tk.Frame(btn, bg=bg)
+    tk.Label(inner, text=icon, bg=bg, fg=theme.ACCENT if enabled else theme.BORDER,
+             font=theme.font(34)).pack(pady=(18, 4))
+    tk.Label(inner, text=label, bg=bg, fg=ink, font=theme.font(20, "bold")).pack()
+    tk.Label(inner, text=hint, bg=bg, fg=theme.MUTED, font=theme.SMALL).pack(pady=(2, 18))
     inner.pack()
     # make the whole tile clickable, not just the button face
-    for child in (inner, *inner.winfo_children()):
-        child.bind("<Button-1>", lambda e, c=command: c())
+    if enabled:
+        for child in (inner, *inner.winfo_children()):
+            child.bind("<Button-1>", lambda e, c=command: c())
     btn.grid(row=0, column=col, sticky="nsew", padx=10, pady=6, ipadx=6)
 
 

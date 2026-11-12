@@ -1,19 +1,60 @@
 {
   "enabled_pins": [
-    4,
-    5,
     6,
     7,
-    15
+    15,
+    17,
+    18
   ],
   "trigger_delta_default": 120,
   "trigger_delta_overrides": {
-    "4": 144,
-    "5": 40,
-    "6": 40,
-    "7": 48,
-    "15": 91
+    "17": 239,
+    "18": 174,
+    "6": 3,
+    "7": 37,
+    "15": 42
   },
   "_comment": "trigger_delta = how many ADC units of change from baseline count as 'tube detected'. Lower = more sensitive (needed for translucent tubes). Overrides are per-GPIO-pin, keyed by pin number as a string.",
-  "calibrated_at": "2026-10-03T02:07:34"
+  "calibrated_at": "factory default (2026-10-03)",
+  "calibrated_levels": {
+    "17": [
+      3765,
+      3168,
+      144,
+      1843
+    ],
+    "18": [
+      3289,
+      2855,
+      132,
+      1696
+    ],
+    "6": [
+      133,
+      125,
+      120
+    ],
+    "7": [
+      988,
+      895
+    ],
+    "15": [
+      815,
+      710
+    ]
+  },
+  "roles": {
+    "entry": [
+      17,
+      18
+    ],
+    "d9": [
+      6
+    ],
+    "d11": [
+      7,
+      15
+    ]
+  },
+  "calibration_source": "default"
 }

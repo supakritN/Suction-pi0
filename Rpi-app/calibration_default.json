@@ -1,0 +1,120 @@
+{
+  "_comment": "Factory calibration from position recordings (tools/build_default_calibration.py). Loaded from the Calibrate screen ('Load factory defaults'); auto-calibrate overrides it.",
+  "recorded_at": "2026-10-03",
+  "enabled_pins": [
+    6,
+    7,
+    15,
+    17,
+    18
+  ],
+  "roles": {
+    "entry": [
+      17,
+      18
+    ],
+    "d9": [
+      6
+    ],
+    "d11": [
+      7,
+      15
+    ]
+  },
+  "trigger_delta_overrides": {
+    "17": 239,
+    "18": 174,
+    "6": 3,
+    "7": 37,
+    "15": 42
+  },
+  "calibrated_levels": {
+    "17": [
+      3765,
+      3168,
+      144,
+      1843
+    ],
+    "18": [
+      3289,
+      2855,
+      132,
+      1696
+    ],
+    "6": [
+      133,
+      125,
+      120
+    ],
+    "7": [
+      988,
+      895
+    ],
+    "15": [
+      815,
+      710
+    ]
+  },
+  "report": {
+    "17": {
+      "role": "entry",
+      "levels": {
+        "out": 3765,
+        "entry": 144,
+        "9cm": 1843,
+        "11cm": 3168
+      },
+      "smallest_change": -596,
+      "noise_sd": 1.51,
+      "signal_to_noise": 395.2
+    },
+    "18": {
+      "role": "entry",
+      "levels": {
+        "out": 3289,
+        "entry": 132,
+        "9cm": 1696,
+        "11cm": 2855
+      },
+      "smallest_change": -434,
+      "noise_sd": 3.71,
+      "signal_to_noise": 117.0
+    },
+    "6": {
+      "role": "d9",
+      "levels": {
+        "out": 133,
+        "entry": 133,
+        "9cm": 125,
+        "11cm": 120
+      },
+      "smallest_change": -8,
+      "noise_sd": 0.51,
+      "signal_to_noise": 16.2
+    },
+    "7": {
+      "role": "d11",
+      "levels": {
+        "out": 988,
+        "entry": 988,
+        "9cm": 988,
+        "11cm": 895
+      },
+      "smallest_change": -93,
+      "noise_sd": 0.95,
+      "signal_to_noise": 98.6
+    },
+    "15": {
+      "role": "d11",
+      "levels": {
+        "out": 815,
+        "entry": 816,
+        "9cm": 816,
+        "11cm": 710
+      },
+      "smallest_change": -105,
+      "noise_sd": 0.78,
+      "signal_to_noise": 133.5
+    }
+  }
+}

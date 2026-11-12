@@ -7,6 +7,7 @@ import tkinter as tk
 
 from .. import theme
 from .. import widgets as w
+from ...serial_node import calibration_summary
 
 
 _DEBUG = [False]
@@ -27,7 +28,7 @@ def render(app, parent, **kw):
     status_lbl.pack(side="bottom", anchor="w", pady=(4, 4))
 
     ready_btn   = w.primary_button(btns, "Ready",    lambda: _start(app))
-    recheck_btn = w.button(btns,         "Re-check", lambda: refresh())
+    recheck_btn = w.button(btns,         "Re-check", lambda: refresh(force=True))
     cal_btn     = w.button(btns,         "Calibrate", lambda: app.show("calibrate"))
     debug_btn   = w.ghost_button(btns, _toggle_label(), lambda: None)
     back_btn    = w.ghost_button(btns, "Back",      lambda: _back(app))
@@ -45,51 +46,79 @@ def render(app, parent, **kw):
     body_wrap, body = _scrollable(frame)
     body_wrap.pack(fill="both", expand=True)
 
-    def refresh():
-        statuses = app.node.self_check()
-        connected = app.node.is_connected()
-        for child in body.winfo_children():
-            child.destroy()
+    # Rebuilding every widget on each poll made the screen blink. Rebuild
+    # only when the *structure* changes (connection, view, any sensor's
+    # state); otherwise just update the debug ADC text in place.
+    view = {"sig": None, "detail": {}, "ready_shown": False, "status": None}
 
-        if not connected or not statuses:
-            tk.Label(body, text="⚠  Waiting for ESP32 over USB…",
-                     bg=theme.BG, fg=theme.WARN, font=theme.font(18, "bold")).pack(
-                anchor="nw", pady=12)
-            sub_lbl.config(text="Plug the ESP32 into any USB port.")
-            status_lbl.config(text="No data on serial. The app auto-connects when the ESP is detected.",
-                              fg=theme.WARN)
-            ready_btn.pack_forget()
+    def _show_ready(show):
+        if show != view["ready_shown"]:
+            view["ready_shown"] = show
+            if show:
+                ready_btn.pack(side="left", padx=(0, 8), before=recheck_btn)
+            else:
+                ready_btn.pack_forget()
+
+    def _status(text, fg):
+        if view["status"] != (text, fg):
+            view["status"] = (text, fg)
+            status_lbl.config(text=text, fg=fg)
+
+    def refresh(force=False):
+        statuses = app.node.self_check()
+        connected = app.node.is_connected() and bool(statuses)
+
+        sig = (connected, _DEBUG[0],
+               tuple((s.id, _tag(s)) for s in statuses) if connected else ())
+        if force or sig != view["sig"]:
+            view["sig"] = sig
+            view["detail"] = {}
+            for child in body.winfo_children():
+                child.destroy()
+            if not connected:
+                tk.Label(body, text="⚠  Waiting for ESP32 over USB…",
+                         bg=theme.BG, fg=theme.WARN, font=theme.font(18, "bold")).pack(
+                    anchor="nw", pady=12)
+                sub_lbl.config(text="Plug the ESP32 into any USB port.")
+            elif _DEBUG[0]:
+                view["detail"] = _render_debug(body, statuses)
+                sub_lbl.config(text="Debug view — pin + raw ADC per sensor (scroll if needed).")
+            else:
+                _render_simple(body, statuses)
+                sub_lbl.config(text="Green = ready · Red = fault · Gray = not installed."
+                                    f"   Calibration: {calibration_summary()}")
             debug_btn.config(text=_toggle_label())
+
+        if not connected:
+            _status("No data on serial. The app auto-connects when the ESP is detected.",
+                    theme.WARN)
+            _show_ready(False)
             return
+
+        for s in statuses:
+            lbl = view["detail"].get(s.id)
+            if lbl is not None and lbl.cget("text") != s.detail:
+                lbl.config(text=s.detail)
 
         # "Enabled" pins = those we actually require. Disabled pins are red
         # markers but do NOT block Ready.
         enabled   = [s for s in statuses if not s.disabled]
         installed = [s for s in enabled if s.present]
-        all_ok    = installed and all(s.ok for s in installed)
-
-        if _DEBUG[0]:
-            _render_debug(body, statuses)
-            sub_lbl.config(text="Debug view — pin + raw ADC per sensor (scroll if needed).")
-        else:
-            _render_simple(body, statuses)
-            sub_lbl.config(text="Green = ready · Red = fault · Gray = not installed.")
+        all_ok    = bool(installed) and all(s.ok for s in installed)
 
         n_ok = sum(1 for s in installed if s.ok)
         n_disabled = sum(1 for s in statuses if s.disabled)
         tail = f" ({n_disabled} disabled)" if n_disabled else ""
         if all_ok:
-            status_lbl.config(text=f"All {n_ok} enabled sensors ready.{tail}", fg=theme.OK)
-            ready_btn.pack(side="left", padx=(0, 8), before=recheck_btn)
+            _status(f"All {n_ok} enabled sensors ready.{tail}", theme.OK)
         else:
             bad_names = [f"{s.label} ({s.detail.split(' · ')[0]})"
                          for s in installed if not s.ok]
             if bad_names:
-                status_lbl.config(text=f"Fault: {', '.join(bad_names)}", fg=theme.BAD)
+                _status(f"Fault: {', '.join(bad_names)}", theme.BAD)
             else:
-                status_lbl.config(text=f"Waiting for enabled sensors…{tail}", fg=theme.WARN)
-            ready_btn.pack_forget()
-        debug_btn.config(text=_toggle_label())
+                _status(f"Waiting for enabled sensors…{tail}", theme.WARN)
+        _show_ready(all_ok)
 
     def toggle_debug():
         _DEBUG[0] = not _DEBUG[0]
@@ -97,7 +126,7 @@ def render(app, parent, **kw):
 
     debug_btn.config(command=toggle_debug)
 
-    app.set_poll(600, refresh)
+    app.set_poll(300, refresh)
     refresh()
 
 
@@ -204,12 +233,14 @@ def _side_card(parent, title, side_statuses):
 
 # ── debug view ──────────────────────────────────────────────
 def _render_debug(parent, statuses):
+    """Build the debug table; return {sensor id: detail label} for live updates."""
+    details = {}
     rows = tk.Frame(parent, bg=theme.SURFACE)
     rows.pack(anchor="nw", fill="x")
 
     header = tk.Frame(rows, bg=theme.SURFACE)
     header.pack(fill="x", padx=10, pady=(8, 2))
-    for text, w_, anchor in [("Sensor", 24, "w"), ("Pin / value", 24, "w"), ("State", 12, "e")]:
+    for text, w_, anchor in [("Sensor", 24, "w"), ("Pin / value", 34, "w"), ("State", 12, "e")]:
         tk.Label(header, text=text, bg=theme.SURFACE, fg=theme.MUTED,
                  font=theme.font(10, "bold"), width=w_, anchor=anchor).pack(side="left")
 
@@ -219,11 +250,13 @@ def _render_debug(parent, statuses):
         prefix = {"throat": "[T]", "mouth": "[M]", "pressure": "[P]"}.get(s.side, "")
         tk.Label(row, text=f"{prefix} {s.label}", bg=theme.SURFACE, fg=theme.TEXT,
                  font=theme.font(11), width=24, anchor="w").pack(side="left")
-        tk.Label(row, text=s.detail, bg=theme.SURFACE, fg=theme.MUTED,
-                 font=theme.font(10), width=24, anchor="w").pack(side="left")
+        details[s.id] = tk.Label(row, text=s.detail, bg=theme.SURFACE, fg=theme.MUTED,
+                                 font=theme.font(10), width=34, anchor="w")
+        details[s.id].pack(side="left")
         tk.Label(row, text=_tag(s), bg=theme.SURFACE,
                  fg=_tag_color(s), font=theme.font(10, "bold"),
                  width=12, anchor="e").pack(side="left")
+    return details
 
 
 # ── bits ────────────────────────────────────────────────────

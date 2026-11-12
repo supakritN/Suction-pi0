@@ -1,8 +1,10 @@
 [Desktop Entry]
 Type=Application
-Name=Suction Monitor
-Comment=ESP Sensor Monitor
-Exec=env DISPLAY=:0 /home/local/Documents/Suction/venv/bin/python /home/local/Documents/Suction/Rpi-app/main.py
-Icon=utilities-system-monitor
+Name=Suction Trainer
+Comment=Clinical suctioning training simulator (starts fullscreen at login)
+Exec=/home/local/Documents/Suction-pi0/Rpi-app/start.sh
+Icon=/home/local/.local/share/icons/suction-trainer.png
 Terminal=false
-Categories=Utility;
+Categories=Education;
+StartupWMClass=SuctionTrainer
+X-GNOME-Autostart-enabled=true

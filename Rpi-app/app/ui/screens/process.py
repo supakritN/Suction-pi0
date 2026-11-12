@@ -1,41 +1,44 @@
 """Process — depth + duration + attempt count, computed on the Pi.
 
 Normal view:
-  Big Time, big Depth, TOUCH banner, Cap/9/11 checkpoints, injections summary,
-  live sensor-dot row.
+  Big Time, Depth gauge, TOUCH banner, Cap/9/11 checkpoints, injections summary.
 
 Debug view (toggle):
-  Live ADC graphs per enabled pin — baseline, ±threshold, current value — so
+  Live ADC graphs per throat pin — baseline, ±threshold, current value — so
   you can see whether a trigger is set too high / too low for the cloudy tube.
+
+A 5-4-3-2-1-Start! countdown runs first; the sensors are zeroed from the
+readings taken during it (tube OUT), then the session timer starts.
+
+Detection (baseline, hysteresis, debounce) lives in app/detector.py. This
+screen only renders, and it does so without flicker: widgets and canvas
+items are created once and then updated in place, only when a value changes.
 """
+import math
 import time as _time
 import tkinter as tk
 from collections import deque
 
 from .. import theme
 from .. import widgets as w
-from ...serial_node import load_trigger_deltas
+from ...detector import DEPTH_CM, Injection, ThroatDetector
+from ...serial_node import load_calibrated_levels, load_roles, load_trigger_deltas
 
 
-CAP_PIN   = 4
-TOP_PINS  = (5, 6)       # 9 cm depth
-BOT_PINS  = (7, 15)      # 11 cm depth
-
+COUNTDOWN_S    = 5
+START_SHOW_S   = 0.8      # how long "Start!" stays up
+POLL_MS        = 50
+GRAPH_EVERY_MS = 100
+THR_REFRESH_S  = 1.0
 TOUCH_FLASH_MS = 1500
-_HIST_LEN = 120           # ≈ 12 s at 100 ms poll
+_HIST_LEN      = 150      # ≈ 7.5 s at 50 ms poll
 
-_PIN_NAMES = {4: "Cap", 5: "TL (9cm)", 6: "TR (9cm)", 7: "BL (11cm)", 15: "BR (11cm)"}
+_ROLE_NAMES = {"entry": "Entry", "9cm": "9 cm", "11cm": "11 cm"}
 _DEBUG = [False]          # module-level, remembered across screen opens
 
-
-_DEPTH_TEXT = {
-    0: ("Out",   "0 cm"),
-    1: ("Entry", "0 cm"),
-    2: ("9 cm",  "9 cm"),
-    3: ("11 cm", "11 cm"),
-}
-_DEPTH_LEVEL_CM = {0: 0, 1: 0.5, 2: 9, 3: 11}   # cm shown on the bar
-_DEPTH_SCALE_MAX = 12                            # cm — bar range
+_DEPTH_NAME = {0: "Out", 1: "Entry", 2: "9 cm", 3: "11 cm"}
+_DEPTH_LEVEL_CM = {0: 0, 1: 0.5, 2: 9, 3: 11}    # cm shown on the bar
+_DEPTH_SCALE_MAX = 12                             # cm — bar range
 _DEPTH_MARKERS   = [(0, "0"), (9, "9 cm"), (11, "11 cm")]
 
 
@@ -43,322 +46,337 @@ def render(app, parent, **kw):
     frame = tk.Frame(parent, bg=theme.BG)
     frame.pack(fill="both", expand=True, padx=22, pady=10)
 
-    w.title(frame, "Practice in progress").pack(anchor="w")
+    # Layout is sized for the Pi's HDMI at 2.25× scale (≈ 853×480 usable).
+    top = tk.Frame(frame, bg=theme.BG)
+    top.pack(fill="x")
+    tk.Label(top, text="Practice", bg=theme.BG, fg=theme.TEXT,
+             font=theme.H2).pack(side="left", anchor="w")
+    touch_banner = tk.Label(top, text="", bg=theme.BG, fg=theme.ACCENT,
+                            font=theme.font(16, "bold"))
+    touch_banner.pack(side="left", padx=(18, 0))
+    status_lbl = tk.Label(top, text="", bg=theme.BG, fg=theme.MUTED, font=theme.SMALL)
+    status_lbl.pack(side="right", anchor="e")
 
     # ── buttons pinned to bottom so they stay visible in both views ──
     btn_row = tk.Frame(frame, bg=theme.BG)
     btn_row.pack(side="bottom", anchor="w", pady=(6, 0))
-    w.primary_button(btn_row, "Done", lambda: _finish(app, st)).pack(side="left")
+    w.primary_button(btn_row, "Done", lambda: _finish(app, det)).pack(side="left")
     debug_btn = w.ghost_button(btn_row, _dbg_label(), lambda: None)
     debug_btn.pack(side="left", padx=(10, 0))
+    w.ghost_button(btn_row, "Re-zero", lambda: _rezero()).pack(side="left", padx=(10, 0))
     w.ghost_button(btn_row, "Back", lambda: _abort_back(app)).pack(side="left", padx=(10, 0))
 
-    # ── Time cell ──
-    header = tk.Frame(frame, bg=theme.BG)
-    header.pack(fill="x")
-    time_val, _ = _bigcell(header, 0, "Time", "0.0 s", width_cols=1)
-    header.columnconfigure(0, weight=1)
-
-    # ── Depth bar (visual) ──
-    depth_card = tk.Frame(frame, bg=theme.SURFACE,
+    # ── Time cell + Depth gauge side by side ──
+    main = tk.Frame(frame, bg=theme.BG)
+    main.pack(fill="x", pady=(4, 0))
+    main.columnconfigure(0, weight=1, uniform="m")
+    main.columnconfigure(1, weight=3, uniform="m")
+    time_cell = tk.Frame(main, bg=theme.SURFACE,
+                         highlightbackground=theme.BORDER, highlightthickness=1)
+    time_cell.grid(row=0, column=0, sticky="nsew", padx=(0, 6))
+    tk.Label(time_cell, text="Time", bg=theme.SURFACE, fg=theme.MUTED,
+             font=theme.SMALL).pack(pady=(8, 0))
+    time_val = tk.Label(time_cell, text="0.0 s", bg=theme.SURFACE, fg=theme.TEXT,
+                        font=theme.font(26, "bold"))
+    time_val.pack(expand=True)
+    depth_card = tk.Frame(main, bg=theme.SURFACE,
                           highlightbackground=theme.BORDER, highlightthickness=1)
-    depth_card.pack(fill="x", pady=(6, 2))
+    depth_card.grid(row=0, column=1, sticky="nsew")
     tk.Label(depth_card, text="Depth", bg=theme.SURFACE, fg=theme.MUTED,
-             font=theme.SMALL).pack(anchor="w", padx=14, pady=(8, 0))
-    depth_canvas = tk.Canvas(depth_card, bg=theme.SURFACE, height=90,
-                             highlightthickness=0)
-    depth_canvas.pack(fill="x", padx=10, pady=(0, 6))
+             font=theme.SMALL).pack(anchor="w", padx=12, pady=(6, 0))
+    gauge = _DepthGauge(depth_card)
 
-    touch_banner = tk.Label(frame, text="", bg=theme.BG, fg=theme.ACCENT,
-                            font=theme.font(18, "bold"))
-    touch_banner.pack(anchor="w", pady=(4, 0))
+    # ── normal (simple) view: checkpoints + session summary in one row ──
+    simple_wrap = tk.Frame(frame, bg=theme.SURFACE)
+    cks = [_checkpoint(simple_wrap, "Entry"), _checkpoint(simple_wrap, "9 cm"),
+           _checkpoint(simple_wrap, "11 cm")]
+    tk.Frame(simple_wrap, bg=theme.BORDER, width=1).pack(side="left", fill="y", padx=8, pady=6)
+    inj_val       = _summary(simple_wrap, "Injections", "0")
+    max_depth_val = _summary(simple_wrap, "Max depth",  "—")
+    last_time_val = _summary(simple_wrap, "Last time",  "—")
 
-    # ── normal (simple) view container ──
-    simple_wrap = tk.Frame(frame, bg=theme.BG)
-    ck_row = tk.Frame(simple_wrap, bg=theme.SURFACE)
-    ck_row.pack(fill="x", pady=(6, 4), ipadx=10, ipady=6)
-    cap_ck = _checkpoint(ck_row, "Cap")
-    d9_ck  = _checkpoint(ck_row, "9 cm")
-    d11_ck = _checkpoint(ck_row, "11 cm")
-
-    sumrow = tk.Frame(simple_wrap, bg=theme.SURFACE)
-    sumrow.pack(fill="x", pady=(0, 6), ipadx=10, ipady=6)
-    inj_val       = _summary(sumrow, "Injections", "0")
-    max_depth_val = _summary(sumrow, "Max depth",  "—")
-    last_time_val = _summary(sumrow, "Last time",  "—")
-
-    # ── debug (graphs) view container ──
+    # ── debug (graphs) view: rows share the remaining height ──
     debug_wrap = tk.Frame(frame, bg=theme.BG)
-    graphs: dict[int, tuple] = {}   # pin → (canvas, text_label)
+    roles = load_roles()        # which GPIO is entry / 9 cm / 11 cm (pins_config)
+    graphs = [_PinGraph(debug_wrap, pin, _pin_name(roles, pin)) for pin in roles.all_pins]
 
     def _mount_view():
         simple_wrap.pack_forget()
         debug_wrap.pack_forget()
-        for c in debug_wrap.winfo_children():
-            c.destroy()
-        graphs.clear()
         if _DEBUG[0]:
             debug_wrap.pack(fill="both", expand=True, pady=(4, 0))
-            _build_graphs(debug_wrap, graphs)
         else:
-            simple_wrap.pack(fill="x")
+            simple_wrap.pack(fill="x", pady=(6, 0), ipady=4)
         debug_btn.config(text=_dbg_label())
+        ck_state[0] = None                    # re-push checkpoint colours
 
     def _toggle_debug():
         _DEBUG[0] = not _DEBUG[0]
         _mount_view()
 
     debug_btn.config(command=_toggle_debug)
-    _mount_view()
 
     # ── session state ──────────────────────────────────────
-    st = {
-        "baseline": {},
-        "cap_prev": False,
-        "in_start": None,
-        "cur_max_depth": 0,
-        "touched_9_now": False,
-        "touched_11_now": False,
-        "injections": 0,
-        "max_depth_overall": 0,
-        "last_time_s": None,
-        "total_time_ms": 0,
-        "touch_hide_at": 0.0,
-        "history": {pin: deque(maxlen=_HIST_LEN) for pin in (CAP_PIN, *TOP_PINS, *BOT_PINS)},
-    }
+    thr = {"default": 120, "over": {}, "at": 0.0}
 
-    def _capture_baseline():
-        pv = app.node.get_pin_values()
-        if pv:
-            st["baseline"] = dict(pv)
+    def _thr(pin):
+        return thr["over"].get(pin, thr["default"])
 
-    def _flash(text):
-        touch_banner.config(text=text)
-        st["touch_hide_at"] = _time.monotonic() + TOUCH_FLASH_MS / 1000.0
+    det = ThroatDetector(_thr, load_calibrated_levels(), roles)
+    history = {pin: deque(maxlen=_HIST_LEN) for pin in roles.all_pins}
+    ui = {"touch_hide_at": 0.0, "graph_at": 0.0,
+          "start_at": _time.monotonic() + COUNTDOWN_S, "started": False, "cd_hide_at": 0.0}
+    prime_buf = deque(maxlen=16)        # last ~0.8 s of countdown readings
+
+    overlay = tk.Frame(frame.master, bg=theme.BG)
+    overlay.place(relx=0, rely=0, relwidth=1, relheight=1)
+    cd_mid = tk.Frame(overlay, bg=theme.BG)
+    cd_mid.place(relx=0.5, rely=0.45, anchor="center")
+    tk.Label(cd_mid, text="Get ready", bg=theme.BG, fg=theme.MUTED,
+             font=theme.font(22, "bold")).pack()
+    cd_num = tk.Label(cd_mid, text=str(COUNTDOWN_S), bg=theme.BG, fg=theme.ACCENT,
+                      font=theme.font(140, "bold"))
+    cd_num.pack()
+    cd_hint = tk.Label(cd_mid, text="Keep the tube OUT — zeroing sensors",
+                       bg=theme.BG, fg=theme.MUTED, font=theme.BODY)
+    cd_hint.pack()
+    w.ghost_button(overlay, "Cancel", lambda: _abort_back(app)).place(
+        relx=0, rely=1, x=22, y=-10, anchor="sw")
+    ck_state = [None]
+
+    def _rezero():
+        det.reset_baseline()
+        for h in history.values():
+            h.clear()
+
+    lbl_cache: dict = {}
+
+    def _text(widget, text, fg=None):
+        """Configure a label only when its text/colour actually changes."""
+        key = id(widget)
+        val = (text, fg)
+        if lbl_cache.get(key) != val:
+            lbl_cache[key] = val
+            widget.config(text=text, **({"fg": fg} if fg else {}))
 
     def tick():
         now = _time.monotonic()
-        if touch_banner.cget("text") and now > st["touch_hide_at"]:
-            touch_banner.config(text="")
+        if now - thr["at"] > THR_REFRESH_S:
+            thr["default"], thr["over"] = load_trigger_deltas()
+            thr["at"] = now
+
+        if ui["touch_hide_at"] and now > ui["touch_hide_at"]:
+            ui["touch_hide_at"] = 0.0
+            _text(touch_banner, "")
 
         pv = app.node.get_pin_values()
+
+        if not ui["started"]:
+            left = ui["start_at"] - now
+            if left > 0:
+                _text(cd_num, str(math.ceil(left)))
+                if pv:
+                    prime_buf.append(pv)
+                    _text(cd_hint, "Keep the tube OUT — zeroing sensors", theme.MUTED)
+                else:
+                    _text(cd_hint, "⚠ Waiting for ESP…", theme.WARN)
+                return
+            ui["started"] = True
+            det.prime(list(prime_buf))
+            _text(cd_num, "Start!", theme.OK)
+            _text(cd_hint, "")
+            ui["cd_hide_at"] = now + START_SHOW_S
+        if ui["cd_hide_at"] and now > ui["cd_hide_at"]:
+            ui["cd_hide_at"] = 0.0
+            overlay.destroy()
+
         if not pv:
-            time_val.config(text="—")
-            depth_val.config(text="Waiting ESP", fg=theme.WARN)
+            _text(status_lbl, "⚠ Waiting for ESP…", theme.WARN)
+            _text(time_val, "—", theme.MUTED)
             return
 
-        if not st["baseline"]:
-            _capture_baseline()
+        s = det.feed(pv, now)
+        if not s.ready:
+            _text(status_lbl, "Zeroing sensors — keep the tube OUT…", theme.WARN)
             return
+        if det.recovered:
+            _text(status_lbl, "● Live (tube was in at start — using calibrated zero)", theme.WARN)
+        else:
+            _text(status_lbl, "● Live", theme.OK)
 
-        # push samples into per-pin history (for the debug graph)
-        for pin in st["history"]:
+        for pin in roles.all_pins:
             if pin in pv:
-                st["history"][pin].append(pv[pin])
+                history[pin].append(pv[pin])
 
-        tdef, tover = load_trigger_deltas()
-        def _thr(pin): return tover.get(pin, tdef)
-
-        triggered = {pin: abs(pv.get(pin, base) - base) > _thr(pin)
-                     for pin, base in st["baseline"].items()}
-
-        cap_now = triggered.get(CAP_PIN, False)
-        d9  = any(triggered.get(p, False) for p in TOP_PINS)
-        d11 = any(triggered.get(p, False) for p in BOT_PINS)
-
-        if   d11: depth_level = 3
-        elif d9:  depth_level = 2
-        elif cap_now: depth_level = 1
-        else:     depth_level = 0
-
-        if not _DEBUG[0]:
-            _light(cap_ck, cap_now or depth_level >= 1)
-            _light(d9_ck,  d9 or depth_level >= 2)
-            _light(d11_ck, d11 or depth_level >= 3)
-        else:
-            _redraw_graphs(graphs, st["history"], st["baseline"], _thr, pv)
-
-        if cap_now and not st["cap_prev"]:
-            st["in_start"] = now
-            st["cur_max_depth"] = depth_level
-            st["touched_9_now"] = False
-            st["touched_11_now"] = False
-        if cap_now:
-            st["cur_max_depth"] = max(st["cur_max_depth"], depth_level)
-            if d9 and not st["touched_9_now"]:
-                st["touched_9_now"] = True
+        for ev in s.events:
+            if ev == "touch9":
                 _flash("✓ TOUCH 9 cm")
-            if d11 and not st["touched_11_now"]:
-                st["touched_11_now"] = True
+            elif ev == "touch11":
                 _flash("✓ TOUCH 11 cm")
+            elif ev == "healed":
+                _flash("↺ Entry auto-cleared")
+            elif isinstance(ev, Injection):
+                _text(inj_val, str(det.injections))
+                _text(last_time_val, f"{ev.duration_s:.1f} s")
+                _text(max_depth_val, f"{DEPTH_CM[det.max_level]} cm")
 
-        if st["cap_prev"] and not cap_now and st["in_start"] is not None:
-            dur = now - st["in_start"]
-            st["injections"] += 1
-            st["total_time_ms"] += int(dur * 1000)
-            st["last_time_s"] = dur
-            st["max_depth_overall"] = max(st["max_depth_overall"], st["cur_max_depth"])
-            if not _DEBUG[0]:
-                inj_val.config(text=str(st["injections"]))
-                last_time_val.config(text=f"{dur:.1f} s")
-                _, cm = _DEPTH_TEXT[st["max_depth_overall"]]
-                max_depth_val.config(text=cm)
-            st["in_start"] = None
-            st["cur_max_depth"] = 0
-
-        st["cap_prev"] = cap_now
-
-        if st["in_start"] is not None:
-            t = now - st["in_start"]
-            time_val.config(text=f"{t:.1f} s", fg=theme.ACCENT)
+        if _DEBUG[0]:
+            if now - ui["graph_at"] >= GRAPH_EVERY_MS / 1000.0:
+                ui["graph_at"] = now
+                for g in graphs:
+                    g.update(history[g.pin], det.baseline.get(g.pin),
+                             det.thr_pair(g.pin), pv.get(g.pin))
         else:
-            time_val.config(text=f"{(st['last_time_s'] or 0):.1f} s" if st["last_time_s"] else "0.0 s",
-                            fg=theme.TEXT)
+            states = (s.level >= 1, s.level >= 2, s.level >= 3)
+            if states != ck_state[0]:
+                ck_state[0] = states
+                for ck, on in zip(cks, states):
+                    _light(ck, on)
 
-        cm_now = _DEPTH_LEVEL_CM[depth_level]
-        _draw_depth_bar(depth_canvas, cm_now, depth_level)
+        if s.in_start is not None:
+            t_txt, t_col = f"{now - s.in_start:.1f} s", theme.ACCENT
+        else:
+            last = det.last_time_s
+            t_txt, t_col = (f"{last:.1f} s" if last else "0.0 s"), theme.TEXT
+        _text(time_val, t_txt, t_col)
 
-    app.after(400, _capture_baseline)
-    app.set_poll(80, tick)
+        gauge.set_level(s.level)
+
+    def _flash(text):
+        _text(touch_banner, text)
+        ui["touch_hide_at"] = _time.monotonic() + TOUCH_FLASH_MS / 1000.0
+
+    _mount_view()
+    app.set_poll(POLL_MS, tick)
 
 
-# ── debug graphs ─────────────────────────────────────────────
-def _build_graphs(parent, graphs):
-    """One row per enabled throat pin (fixed set here)."""
-    pins = [CAP_PIN, *TOP_PINS, *BOT_PINS]
-    for pin in pins:
+# ── depth gauge (persistent canvas items) ───────────────────────
+class _DepthGauge:
+    H = 80
+
+    def __init__(self, parent):
+        self.can = tk.Canvas(parent, bg=theme.SURFACE, height=self.H, highlightthickness=0)
+        self.can.pack(fill="x", padx=10, pady=(0, 6))
+        self.level = None
+        self.width = 0
+        self.can.bind("<Configure>", self._on_resize)
+
+    def _on_resize(self, e):
+        if e.width != self.width:
+            self.width = e.width
+            self._build()
+
+    def _build(self):
+        c = self.can
+        c.delete("all")
+        w_ = max(self.width, 100)
+        self.left, self.right = 48, w_ - 48
+        self.bar_y, bh = self.H // 2, 10
+        c.create_rectangle(self.left, self.bar_y - bh / 2, self.right, self.bar_y + bh / 2,
+                           fill=theme.SURFACE2, outline=theme.BORDER)
+        self.fill = c.create_rectangle(self.left, self.bar_y - bh / 2, self.left,
+                                       self.bar_y + bh / 2, fill=theme.MUTED, outline="")
+        for cm_val, text in _DEPTH_MARKERS:
+            x = self._x(cm_val)
+            c.create_line(x, self.bar_y - bh - 6, x, self.bar_y + bh + 6, fill=theme.MUTED)
+            c.create_text(x, self.bar_y + bh + 10, text=text, fill=theme.TEXT,
+                          font=theme.font(11, "bold"), anchor="n")
+        self.dot = c.create_oval(0, 0, 0, 0, fill=theme.MUTED, outline="white", width=2)
+        self.name = c.create_text(0, 0, text="", fill=theme.MUTED,
+                                  font=theme.font(12, "bold"), anchor="s")
+        lvl, self.level = self.level, None
+        self.set_level(lvl or 0)
+
+    def _x(self, cm):
+        return self.left + int((cm / _DEPTH_SCALE_MAX) * max(self.right - self.left, 10))
+
+    def set_level(self, level):
+        if level == self.level or not self.width:
+            return
+        self.level = level
+        c, r, bh = self.can, 11, 10
+        x = self._x(_DEPTH_LEVEL_CM[level])
+        col = (theme.OK if level == 3 else theme.ACCENT if level == 2 else
+               theme.WARN if level == 1 else theme.MUTED)
+        c.coords(self.fill, self.left, self.bar_y - bh / 2, x, self.bar_y + bh / 2)
+        c.itemconfig(self.fill, fill=col)
+        c.coords(self.dot, x - r, self.bar_y - r, x + r, self.bar_y + r)
+        c.itemconfig(self.dot, fill=col)
+        c.coords(self.name, x, self.bar_y - r - 4)
+        c.itemconfig(self.name, text=_DEPTH_NAME[level], fill=col)
+
+
+# ── debug graph row (persistent canvas items) ───────────────────
+def _pin_name(roles, pin):
+    return f"{_ROLE_NAMES.get(roles.role_of(pin), '')} · GPIO {pin}".lstrip(" ·")
+
+
+class _PinGraph:
+    def __init__(self, parent, pin, name):
+        self.pin = pin
         row = tk.Frame(parent, bg=theme.SURFACE)
-        row.pack(fill="x", pady=2)
-        label_box = tk.Frame(row, bg=theme.SURFACE, width=100)
-        label_box.pack(side="left", padx=(6, 4))
-        label_box.pack_propagate(False)
-        tk.Label(label_box, text=_PIN_NAMES.get(pin, f"GPIO {pin}"),
-                 bg=theme.SURFACE, fg=theme.TEXT,
-                 font=theme.font(11, "bold")).pack(anchor="w", pady=(6, 0))
-        val_lbl = tk.Label(label_box, text="—", bg=theme.SURFACE, fg=theme.MUTED,
-                           font=theme.font(10))
-        val_lbl.pack(anchor="w")
-        can = tk.Canvas(row, bg=theme.SURFACE, highlightthickness=0, height=48)
-        can.pack(side="left", fill="x", expand=True, padx=(0, 8), pady=4)
-        graphs[pin] = (can, val_lbl)
+        row.pack(fill="both", expand=True, pady=1)
+        box = tk.Frame(row, bg=theme.SURFACE, width=150)
+        box.pack(side="left", padx=(6, 4), fill="y")
+        box.pack_propagate(False)
+        tk.Label(box, text=name, bg=theme.SURFACE,
+                 fg=theme.TEXT, font=theme.font(9, "bold")).pack(anchor="w")
+        self.val = tk.Label(box, text="—", bg=theme.SURFACE, fg=theme.MUTED,
+                            font=theme.font(8), justify="left")
+        self.val.pack(anchor="w")
+        self.can = tk.Canvas(row, bg=theme.SURFACE, highlightthickness=0, height=24)
+        self.can.pack(side="left", fill="both", expand=True, padx=(0, 8), pady=2)
+        c = self.can
+        self.mid  = c.create_line(0, 0, 0, 0, fill=theme.MUTED)
+        self.hi   = c.create_line(0, 0, 0, 0, fill=theme.BAD, dash=(3, 3))
+        self.lo   = c.create_line(0, 0, 0, 0, fill=theme.BAD, dash=(3, 3))
+        self.rhi  = c.create_line(0, 0, 0, 0, fill=theme.BORDER, dash=(2, 4))
+        self.rlo  = c.create_line(0, 0, 0, 0, fill=theme.BORDER, dash=(2, 4))
+        self.trace = c.create_line(0, 0, 0, 0, fill=theme.ACCENT, width=2)
+        self.span = 0.0
+        self.last_text = None
 
-
-def _redraw_graphs(graphs, history, baselines, thr_fn, pv):
-    for pin, (can, val_lbl) in graphs.items():
-        can.delete("all")
-        w_ = can.winfo_width() or 400
-        h_ = can.winfo_height() or 48
-        base = baselines.get(pin, 2048)
-        thr  = thr_fn(pin)
-        samples = list(history.get(pin, []))
-        cur = pv.get(pin, base)
-
-        # auto range: fit baseline ± max(threshold*2, observed deviation)
-        max_dev = max([thr * 2] + [abs(s - base) for s in samples] + [abs(cur - base)])
-        max_dev = max(max_dev, 40)
-        y_mid = h_ // 2
+    def update(self, samples, base, thr_pair, cur):
+        if base is None or cur is None:
+            return
+        thr, rel = thr_pair
+        c = self.can
+        w_ = c.winfo_width()
+        h_ = c.winfo_height()
+        if w_ <= 1 or h_ <= 1:
+            return
+        # Sticky vertical scale: grows at once, shrinks slowly — no jumpy rescale.
+        need = max([thr * 2, 40] + [abs(s - base) for s in samples])
+        self.span = need if need > self.span else max(need, self.span * 0.97)
+        y_mid, half = h_ // 2, h_ // 2 - 3
 
         def y_of(v):
-            # center = baseline, span = max_dev above/below
-            off = v - base
-            return y_mid - int((off / max_dev) * (h_ // 2 - 3))
+            return y_mid - int(((v - base) / self.span) * half)
 
-        # background baseline line
-        can.create_line(0, y_mid, w_, y_mid, fill=theme.MUTED, width=1)
-        # threshold band
-        can.create_rectangle(0, y_of(base + thr), w_, y_of(base - thr),
-                             fill="", outline=theme.BORDER)
-        can.create_line(0, y_of(base + thr), w_, y_of(base + thr),
-                        fill=theme.BAD, dash=(3, 3), width=1)
-        can.create_line(0, y_of(base - thr), w_, y_of(base - thr),
-                        fill=theme.BAD, dash=(3, 3), width=1)
-
-        # trace
-        if len(samples) >= 2:
-            n = len(samples)
+        c.coords(self.mid, 0, y_mid, w_, y_mid)
+        c.coords(self.hi, 0, y_of(base + thr), w_, y_of(base + thr))
+        c.coords(self.lo, 0, y_of(base - thr), w_, y_of(base - thr))
+        c.coords(self.rhi, 0, y_of(base + rel), w_, y_of(base + rel))
+        c.coords(self.rlo, 0, y_of(base - rel), w_, y_of(base - rel))
+        n = len(samples)
+        if n >= 2:
+            step = w_ / (_HIST_LEN - 1)
+            x0 = w_ - (n - 1) * step          # newest sample pinned to the right edge
             pts = []
             for i, s in enumerate(samples):
-                x = int(i * w_ / max(n - 1, 1))
-                pts.extend([x, y_of(s)])
-            can.create_line(*pts, fill=theme.ACCENT, width=2)
+                pts.append(x0 + i * step)
+                pts.append(y_of(s))
+            c.coords(self.trace, *pts)
 
-        # value tag
-        dev = cur - base
+        dev = int(cur - base)
         hit = abs(dev) > thr
-        val_lbl.config(
-            text=f"ADC {cur}  Δ{dev:+d}  thr±{thr}",
-            fg=theme.OK if hit else theme.MUTED,
-        )
+        text = (f"{cur}  Δ{dev:+d}  ±{thr:.0f}", hit)
+        if text != self.last_text:
+            self.last_text = text
+            self.val.config(text=text[0], fg=theme.OK if hit else theme.MUTED)
 
 
 # ── misc helpers ─────────────────────────────────────────────
-def _bigcell(parent, col, label, value, width_cols=2):
-    cell = tk.Frame(parent, bg=theme.SURFACE,
-                    highlightbackground=theme.BORDER, highlightthickness=1)
-    cell.grid(row=0, column=col, columnspan=width_cols,
-              sticky="nsew", padx=5, ipady=6)
-    tk.Label(cell, text=label, bg=theme.SURFACE, fg=theme.MUTED,
-             font=theme.SMALL).pack(pady=(6, 0))
-    val = tk.Label(cell, text=value, bg=theme.SURFACE, fg=theme.TEXT,
-                   font=theme.font(28, "bold"))
-    val.pack(pady=(0, 8))
-    return val, cell
-
-
-def _draw_depth_bar(can, cm, level):
-    """Horizontal clinical depth gauge: 0cm ── 9cm ── 11cm with current marker."""
-    can.delete("all")
-    try:
-        w_ = can.winfo_width()
-    except Exception:
-        w_ = 600
-    if w_ <= 1:
-        w_ = 600
-    h_ = 90
-    margin_x = 48
-    track_left = margin_x
-    track_right = w_ - margin_x
-    track_w = max(track_right - track_left, 10)
-    bar_y = h_ // 2 + 8
-    bar_h = 10
-
-    def _x(cm_val):
-        return track_left + int((cm_val / _DEPTH_SCALE_MAX) * track_w)
-
-    # Track background
-    can.create_rectangle(track_left, bar_y - bar_h / 2,
-                         track_right, bar_y + bar_h / 2,
-                         fill=theme.SURFACE2, outline=theme.BORDER)
-
-    # Progress fill — color by depth level
-    progress_x = _x(cm)
-    fill_col = (theme.OK   if level == 3 else
-                theme.ACCENT if level == 2 else
-                theme.WARN if level == 1 else theme.MUTED)
-    if cm > 0:
-        can.create_rectangle(track_left, bar_y - bar_h / 2,
-                             progress_x, bar_y + bar_h / 2,
-                             fill=fill_col, outline="")
-
-    # Depth markers + labels
-    for cm_val, text in _DEPTH_MARKERS:
-        x = _x(cm_val)
-        can.create_line(x, bar_y - bar_h - 6, x, bar_y + bar_h + 6,
-                        fill=theme.MUTED, width=1)
-        can.create_text(x, bar_y + bar_h + 16, text=text,
-                        fill=theme.TEXT, font=theme.font(11, "bold"), anchor="n")
-
-    # Current depth marker (large dot above bar)
-    r = 11
-    can.create_oval(progress_x - r, bar_y - r,
-                    progress_x + r, bar_y + r,
-                    fill=fill_col, outline="white", width=2)
-    # Numeric readout above the dot
-    name, _ = _DEPTH_TEXT[level]
-    can.create_text(progress_x, bar_y - r - 10, text=name,
-                    fill=fill_col, font=theme.font(13, "bold"), anchor="s")
-
-
 def _summary(parent, label, value):
     cell = tk.Frame(parent, bg=theme.SURFACE)
     cell.pack(side="left", padx=10)
@@ -399,17 +417,16 @@ def _abort_back(app):
     app.show("preparation")
 
 
-def _finish(app, st):
+def _finish(app, det):
     app.clear_poll()
     from ...models import SessionMetrics
-    cm_by_level = {0: 0, 1: 0, 2: 9, 3: 11}
     metrics = SessionMetrics(
-        max_depth_cm=cm_by_level[st["max_depth_overall"]],
-        total_time_ms=st["total_time_ms"],
+        max_depth_cm=DEPTH_CM[det.max_level],
+        total_time_ms=det.total_time_ms,
         pressure_mmhg=None,
         pressure_available=False,
         contact_events=0,
-        contact_band_count=st["injections"],
+        contact_band_count=det.injections,
     )
     from ... import config as cfg_store, scoring, results_log
     result = scoring.score_session(metrics, cfg_store.load_config())
