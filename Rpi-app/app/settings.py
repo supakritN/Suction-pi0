@@ -47,6 +47,17 @@ def get_display_scale() -> float | None:
         return None
 
 
+def get_sound_mode() -> str:
+    return _read().get("sound", "mode", fallback="both").strip().lower() or "both"
+
+
+def get_sound_port() -> int:
+    try:
+        return int(_read().get("sound", "port", fallback="8766"))
+    except ValueError:
+        return 8766
+
+
 def set_ui_version(version: str) -> None:
     if version not in UI_VERSIONS:
         raise ValueError(version)

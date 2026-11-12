@@ -23,6 +23,7 @@ from .. import theme
 from .. import widgets as w
 from ...detector import DEPTH_CM, Injection, ThroatDetector
 from ...serial_node import load_calibrated_levels, load_roles, load_trigger_deltas
+from ... import sound
 
 
 COUNTDOWN_S    = 5
@@ -213,6 +214,7 @@ def render(app, parent, **kw):
                 _flash("✓ TOUCH 9 cm")
             elif ev == "touch11":
                 _flash("✓ TOUCH 11 cm")
+                sound.get().cough()
             elif ev == "healed":
                 _flash("↺ Entry auto-cleared")
             elif isinstance(ev, Injection):

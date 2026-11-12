@@ -12,6 +12,7 @@ from .. import style as S
 from ..mannequin import Mannequin
 from ...detector import DEPTH_CM, Injection, ThroatDetector
 from ...serial_node import load_calibrated_levels, load_roles, load_trigger_deltas
+from ... import sound
 
 COUNTDOWN_S = 5
 START_SHOW_S = 0.8
@@ -154,6 +155,7 @@ def render(app, parent, **kw):
                 flash("✓ reached 9 cm")
             elif ev == "touch11":
                 flash("⚠ too deep — pull back")
+                sound.get().cough()               # catheter hit / too deep -> cough
             elif ev == "healed":
                 flash("↺ sensor auto-cleared")
             elif isinstance(ev, Injection):
