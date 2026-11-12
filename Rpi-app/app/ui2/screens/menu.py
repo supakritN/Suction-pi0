@@ -12,7 +12,7 @@ def open_menu(app):
         return
     # Tk has no translucent overlays: show just the panel over the screen.
     panel = tk.Frame(app, bg=S.BG, highlightthickness=1, highlightbackground=S.ACCENT)
-    panel.place(relx=1, rely=0, x=-12, y=40, anchor="ne", width=360)
+    panel.place(relx=1, rely=0, x=-S.px(12), y=S.px(40), anchor="ne", width=S.px(360))
     panel.lift()
     app._menu = panel
 
@@ -26,7 +26,7 @@ def open_menu(app):
 
     S.tag(panel, "Menu").pack(anchor="w", padx=16, pady=(12, 2))
     S.label(panel, f"Calibration: {calibration_summary()}", 11, fg=S.MUTED,
-            wraplength=320, justify="left").pack(anchor="w", padx=16, pady=(0, 8))
+            wraplength=S.px(320), justify="left").pack(anchor="w", padx=16, pady=(0, 8))
 
     def item(text, fn, kind="secondary"):
         S.button(panel, text, lambda: go(fn), kind=kind, size=13, pady=8).pack(

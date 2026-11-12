@@ -35,6 +35,18 @@ def get_ui_version() -> str:
     return v if v in UI_VERSIONS else DEFAULT_UI
 
 
+def get_display_profile() -> str:
+    return _read().get("display", "profile", fallback="auto").strip().lower() or "auto"
+
+
+def get_display_scale() -> float | None:
+    raw = _read().get("display", "scale", fallback="").strip()
+    try:
+        return float(raw) if raw else None
+    except ValueError:
+        return None
+
+
 def set_ui_version(version: str) -> None:
     if version not in UI_VERSIONS:
         raise ValueError(version)

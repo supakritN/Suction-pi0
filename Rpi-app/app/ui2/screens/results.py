@@ -34,7 +34,7 @@ def render(app, parent, **kw):
     S.label(big, f"/{int(round(score.available_score))}", 22, "bold", fg=S.MUTED, mono=True).pack(
         side="left", anchor="s", pady=(0, 14))
     S.label(left, score.level, 18, "bold").pack(anchor="w")
-    S.label(left, score.note, 11, fg=S.MUTED, wraplength=280, justify="left").pack(anchor="w")
+    S.label(left, score.note, 11, fg=S.MUTED, wraplength=S.px(280), justify="left").pack(anchor="w")
 
     tk.Frame(body, bg=S.LINE, width=1).pack(side="left", fill="y", padx=(0, 22))
     right = tk.Frame(body, bg=S.BG)

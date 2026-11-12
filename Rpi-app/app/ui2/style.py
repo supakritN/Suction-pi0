@@ -4,6 +4,9 @@ navy ink, medical teal/cyan accents, outline mannequin, monospace readouts.
 Flat colours and static lines only (no alpha / glow effects): Tk on a
 Raspberry Pi 3 has neither, and redraws must stay cheap. Sized for the Pi's
 HDMI at 2.25× scale (≈ 853×480 usable). DejaVu fonts only.
+
+Other screens: app.py calls set_scale() from the detected display profile
+(app/display.py); f() and px() then scale fonts and fixed pixel sizes.
 """
 import tkinter as tk
 
@@ -35,9 +38,21 @@ TRACH_IN  = "#ffffff"
 SANS = "DejaVu Sans"
 MONO = "DejaVu Sans Mono"
 
+SCALE = 1.0   # set once at start-up from the display profile
+
+
+def set_scale(scale):
+    global SCALE
+    SCALE = float(scale)
+
+
+def px(n):
+    """Scale a fixed pixel size (widths, wrap lengths, paddings)."""
+    return max(1, int(round(n * SCALE))) if n else 0
+
 
 def f(size, weight="normal", mono=False):
-    return (MONO if mono else SANS, size, weight)
+    return (MONO if mono else SANS, max(6, int(round(size * SCALE))), weight)
 
 
 def label(parent, text="", size=12, weight="normal", fg=INK, bg=BG, mono=False, **kw):
@@ -59,13 +74,14 @@ def button(parent, text, command, kind="primary", size=15, padx=22, pady=10):
     bg, fg, active = colors
     return tk.Button(parent, text=text, command=command, bg=bg, fg=fg,
                      activebackground=active, activeforeground=fg, font=f(size, "bold"),
-                     relief="flat", bd=0, padx=padx, pady=pady, cursor="hand2",
+                     relief="flat", bd=0, padx=px(padx), pady=px(pady), cursor="hand2",
                      highlightthickness=1 if kind == "secondary" else 0,
                      highlightbackground=LINE)
 
 
 def draw_grid(canvas, w, h, step=40, tag_="grid"):
     canvas.delete(tag_)
+    step = px(step)
     for x in range(0, w, step):
         canvas.create_line(x, 0, x, h, fill=GRID, tags=tag_)
     for y in range(0, h, step):
@@ -76,7 +92,7 @@ def draw_grid(canvas, w, h, step=40, tag_="grid"):
 def draw_brackets(canvas, w, h, inset=6, length=18, color=ACCENT, tag_="hud"):
     """HUD corner brackets around a canvas."""
     canvas.delete(tag_)
-    i, L = inset, length
+    i, L = px(inset), px(length)
     for (x, y, dx, dy) in ((i, i, 1, 1), (w - i, i, -1, 1), (i, h - i, 1, -1), (w - i, h - i, -1, -1)):
         canvas.create_line(x, y, x + dx * L, y, fill=color, width=2, tags=tag_)
         canvas.create_line(x, y, x, y + dy * L, fill=color, width=2, tags=tag_)

@@ -77,7 +77,7 @@ def render(app, parent, **kw):
             lambda: (nums.__setitem__(0, not nums[0]), build())).pack(
             side="left", fill="both", expand=True, padx=2)
         key(row, "space", lambda: press(" ")).pack(side="left", fill="both", expand=True,
-                                                    padx=2, ipadx=120)
+                                                    padx=2, ipadx=S.px(120))
         key(row, "⌫", lambda: press("⌫")).pack(side="left", fill="both", expand=True, padx=2)
 
     build()

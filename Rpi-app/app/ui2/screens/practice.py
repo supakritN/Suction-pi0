@@ -27,7 +27,7 @@ def render(app, parent, **kw):
     body.pack(fill="both", expand=True)
 
     # ── right panel ──
-    side = tk.Frame(body, bg=S.BG, width=250)
+    side = tk.Frame(body, bg=S.BG, width=S.px(250))
     side.pack(side="right", fill="y", padx=(0, 18), pady=10)
     side.pack_propagate(False)
     tk.Frame(body, bg=S.LINE, width=1).pack(side="right", fill="y", pady=12)

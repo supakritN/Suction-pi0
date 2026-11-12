@@ -34,7 +34,7 @@ def render(app, parent, **kw):
 
     step_lbl = S.label(frame, "", 15, "bold", fg=S.ACCENT)
     step_lbl.pack(anchor="w", pady=(6, 0))
-    hint_lbl = S.label(frame, "", 12, fg=S.MUTED, wraplength=780, justify="left")
+    hint_lbl = S.label(frame, "", 12, fg=S.MUTED, wraplength=S.px(780), justify="left")
     hint_lbl.pack(anchor="w")
 
     bar = tk.Frame(frame, bg=S.LINE, height=6)

@@ -10,7 +10,7 @@ import tkinter as tk
 import traceback
 
 from ..serial_node import SensorNode
-from .. import settings
+from .. import display, settings
 from . import style as S
 from .screens import calibrate, menu, name, practice, results
 
@@ -42,6 +42,13 @@ class App2(tk.Tk):
             self._go_fullscreen()
             self.after(200, self._go_fullscreen)
 
+        # per-screen sizing: Touch Display 2 (5") is the 1.0 baseline; other
+        # screens (e.g. EDATEC 7") pick their own profile automatically
+        self.update_idletasks()
+        self.display = display.detect_from_settings(self.winfo_screenwidth(), self.winfo_screenheight())
+        S.set_scale(self.display.scale)
+        print(f"[display] {self.display.label} -> scale {self.display.scale}")
+
         # session state (offline only)
         self.username = None
         self.mode = "offline"
@@ -54,10 +61,10 @@ class App2(tk.Tk):
         self.node = SensorNode()
         self.node.start()
 
-        header = tk.Frame(self, bg=S.BG, height=34)
+        header = tk.Frame(self, bg=S.BG, height=S.px(34))
         header.pack(fill="x")
         header.pack_propagate(False)
-        S.tag(header, "LARICE / PRESS-04 · Suction trainer").pack(side="left", padx=14)
+        S.tag(header, "LARICE / PRESS-04 · Suction trainer").pack(side="left", padx=S.px(14))
         tk.Button(header, text="✕", command=self.quit_app, bg=S.BG, fg=S.MUTED, bd=0,
                   relief="flat", activebackground=S.BG, font=S.f(13),
                   cursor="hand2").pack(side="right", padx=(4, 10))
