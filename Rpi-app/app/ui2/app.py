@@ -10,7 +10,7 @@ import tkinter as tk
 import traceback
 
 from ..serial_node import SensorNode
-from .. import display, settings
+from .. import display, settings, sound
 from . import style as S
 from .screens import calibrate, menu, name, practice, results
 
@@ -48,6 +48,7 @@ class App2(tk.Tk):
         self.display = display.detect_from_settings(self.winfo_screenwidth(), self.winfo_screenheight())
         S.set_scale(self.display.scale)
         print(f"[display] {self.display.label} -> scale {self.display.scale}")
+        sound.get()   # start sound output now so remote listeners can connect before the first event
 
         # session state (offline only)
         self.username = None
